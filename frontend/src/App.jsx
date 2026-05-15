@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import YouTubeSummarizer from './pages/YouTubeSummarizer';
@@ -68,6 +69,7 @@ function App() {
               <Route path="brain" element={<SecondBrain />} />
             </Route>
           </Routes>
+          <Analytics />
         </BrowserRouter>
       </ToastProvider>
     </AuthProvider>

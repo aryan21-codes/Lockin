@@ -1,35 +1,114 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { StickyNote, Plus, Trash2 } from 'lucide-react';
+import { StickyNote, Plus, Trash2, Loader2 } from 'lucide-react';
 import AnimatedButton from '../components/ui/AnimatedButton';
+import { api } from '../lib/api';
+
+// Color presets — store a short key in DB, map to full Tailwind classes on the frontend
+const COLOR_MAP = {
+  yellow: 'bg-yellow-500/20 border-yellow-500/50 text-yellow-100 shadow-[0_0_15px_rgba(234,179,8,0.2)]',
+  blue:   'bg-neonBlue/20 border-neonBlue/50 text-blue-100 shadow-[0_0_15px_rgba(0,204,255,0.2)]',
+  purple: 'bg-neonPurple/20 border-neonPurple/50 text-pink-100 shadow-[0_0_15px_rgba(161,51,255,0.2)]',
+  green:  'bg-green-500/20 border-green-500/50 text-green-100 shadow-[0_0_15px_rgba(34,197,94,0.2)]',
+};
+const COLOR_KEYS = Object.keys(COLOR_MAP);
 
 const StickyNotes = () => {
-  const [notes, setNotes] = useState([
-    { id: 1, text: 'Brainstorm ideas for the new app features', color: 'bg-yellow-500/20 border-yellow-500/50 text-yellow-100 shadow-[0_0_15px_rgba(234,179,8,0.2)]', x: 20, y: 20 },
-    { id: 2, text: 'Review pull requests before 5 PM', color: 'bg-neonBlue/20 border-neonBlue/50 text-blue-100 shadow-[0_0_15px_rgba(0,204,255,0.2)]', x: 320, y: 50 },
-    { id: 3, text: "Don't forget to email professor about the extension", color: 'bg-neonPurple/20 border-neonPurple/50 text-pink-100 shadow-[0_0_15px_rgba(161,51,255,0.2)]', x: 100, y: 250 },
-  ]);
-
+  const [notes, setNotes] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [draggingId, setDraggingId] = useState(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
-  const addNote = () => {
-    const colors = [
-      'bg-yellow-500/20 border-yellow-500/50 text-yellow-100 shadow-[0_0_15px_rgba(234,179,8,0.2)]',
-      'bg-neonBlue/20 border-neonBlue/50 text-blue-100 shadow-[0_0_15px_rgba(0,204,255,0.2)]',
-      'bg-neonPurple/20 border-neonPurple/50 text-pink-100 shadow-[0_0_15px_rgba(161,51,255,0.2)]',
-      'bg-green-500/20 border-green-500/50 text-green-100 shadow-[0_0_15px_rgba(34,197,94,0.2)]'
-    ];
-    const newNote = {
-      id: Date.now(),
-      text: '',
-      color: colors[Math.floor(Math.random() * colors.length)],
-      x: Math.random() * 200 + 50,
-      y: Math.random() * 200 + 50
+  // Debounce timers for auto-saving text and position changes
+  const saveTimers = useRef({});
+
+  // ── Fetch notes on mount ──
+  useEffect(() => {
+    fetchNotes();
+    return () => {
+      // Clear any pending save timers on unmount
+      Object.values(saveTimers.current).forEach(clearTimeout);
     };
-    setNotes([...notes, newNote]);
+  }, []);
+
+  const fetchNotes = async () => {
+    try {
+      const res = await api.get('/api/sticky-notes/');
+      if (res.data.success) {
+        setNotes(res.data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch sticky notes:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
+  // ── Debounced save — batches rapid text/position changes into a single API call ──
+  const debouncedUpdate = useCallback((noteId, updates) => {
+    if (saveTimers.current[noteId]) clearTimeout(saveTimers.current[noteId]);
+    saveTimers.current[noteId] = setTimeout(async () => {
+      try {
+        await api.put(`/api/sticky-notes/${noteId}`, updates);
+      } catch (err) {
+        console.error('Failed to save sticky note:', err);
+      }
+    }, 500);
+  }, []);
+
+  // ── Add note ──
+  const addNote = async () => {
+    const colorKey = COLOR_KEYS[Math.floor(Math.random() * COLOR_KEYS.length)];
+    const tempId = `temp-${Date.now()}`;
+    const newNote = {
+      id: tempId,
+      text: '',
+      color: colorKey,
+      x: Math.random() * 200 + 50,
+      y: Math.random() * 200 + 50,
+    };
+
+    // Optimistic UI
+    setNotes(prev => [...prev, newNote]);
+
+    try {
+      const res = await api.post('/api/sticky-notes/', {
+        text: '',
+        color: colorKey,
+        x: newNote.x,
+        y: newNote.y,
+      });
+      if (res.data.success && res.data.data) {
+        // Replace temp note with real one from server
+        setNotes(prev => prev.map(n => n.id === tempId ? res.data.data : n));
+      }
+    } catch (err) {
+      console.error('Failed to create note:', err);
+      setNotes(prev => prev.filter(n => n.id !== tempId));
+    }
+  };
+
+  // ── Delete note ──
+  const deleteNote = async (id) => {
+    const prev = [...notes];
+    setNotes(notes.filter(n => n.id !== id));
+    try {
+      await api.delete(`/api/sticky-notes/${id}`);
+    } catch (err) {
+      console.error('Failed to delete note:', err);
+      setNotes(prev);
+    }
+  };
+
+  // ── Update text ──
+  const updateText = (id, text) => {
+    setNotes(prev => prev.map(n => n.id === id ? { ...n, text } : n));
+    if (!id.toString().startsWith('temp-')) {
+      debouncedUpdate(id, { text });
+    }
+  };
+
+  // ── Drag handlers ──
   const handlePointerDown = (e, id) => {
     e.target.setPointerCapture(e.pointerId);
     setDraggingId(id);
@@ -42,24 +121,24 @@ const StickyNotes = () => {
 
   const handlePointerMove = (e) => {
     if (!draggingId) return;
-    setNotes(notes.map(note => {
+    const newX = e.clientX - offset.x;
+    const newY = e.clientY - offset.y;
+    setNotes(prev => prev.map(note => {
       if (note.id === draggingId) {
-        return {
-          ...note,
-          x: e.clientX - offset.x,
-          y: e.clientY - offset.y
-        };
+        return { ...note, x: newX, y: newY };
       }
       return note;
     }));
   };
 
   const handlePointerUp = () => {
+    if (draggingId) {
+      const note = notes.find(n => n.id === draggingId);
+      if (note && !note.id.toString().startsWith('temp-')) {
+        debouncedUpdate(draggingId, { x: note.x, y: note.y });
+      }
+    }
     setDraggingId(null);
-  };
-
-  const deleteNote = (id) => {
-    setNotes(notes.filter(n => n.id !== id));
   };
 
   return (
@@ -96,58 +175,65 @@ const StickyNotes = () => {
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       >
-         <AnimatePresence>
-           {notes.map(note => (
-             <motion.div 
-               key={note.id}
-               initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
-               animate={{ 
-                 opacity: 1, 
-                 scale: draggingId === note.id ? 1.05 : 1, 
-                 rotate: 0,
-                 boxShadow: draggingId === note.id ? '0 25px 50px rgba(0,0,0,0.4)' : 'none',
-               }}
-               exit={{ opacity: 0, scale: 0.3, rotate: 15, transition: { duration: 0.2 } }}
-               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-               className={`absolute w-64 h-64 p-5 rounded-2xl border backdrop-blur-xl flex flex-col gap-3 group ${note.color} ${draggingId === note.id ? 'z-50 cursor-grabbing' : 'cursor-grab z-10 hover:z-40'}`}
-               style={{ left: note.x, top: note.y }}
-               onPointerDown={(e) => {
-                 // Only initiate drag on the wrapper, not on textarea or button
-                 if (e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
-                   handlePointerDown(e, note.id);
-                 }
-               }}
-             >
-               <div className="w-full flex justify-between items-center shrink-0 mb-1">
-                  <div className="w-12 h-2 bg-white/20 rounded-full mx-auto cursor-grab active:cursor-grabbing"></div>
-                  <motion.button 
-                    onClick={() => deleteNote(note.id)}
-                    whileHover={{ scale: 1.2 }}
-                    whileTap={{ scale: 0.8 }}
-                    className="opacity-0 group-hover:opacity-100 text-white/50 hover:text-red-400 transition-all p-1"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </motion.button>
-               </div>
-               
-               <textarea 
-                 value={note.text}
-                 onChange={(e) => setNotes(notes.map(n => n.id === note.id ? { ...n, text: e.target.value } : n))}
-                 placeholder="Write something..."
-                 className="w-full h-full bg-transparent border-none resize-none focus:outline-none custom-scrollbar outline-none font-medium"
-               />
-             </motion.div>
-           ))}
-         </AnimatePresence>
-         {notes.length === 0 && (
-           <motion.div 
-             initial={{ opacity: 0 }}
-             animate={{ opacity: 1 }}
-             className="absolute inset-0 flex items-center justify-center text-gray-500 pointer-events-none"
-           >
-             Click 'New Note' to create your first sticky note
-           </motion.div>
-         )}
+        {isLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
+          </div>
+        ) : (
+          <>
+            <AnimatePresence>
+              {notes.map(note => (
+                <motion.div 
+                  key={note.id}
+                  initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
+                  animate={{ 
+                    opacity: 1, 
+                    scale: draggingId === note.id ? 1.05 : 1, 
+                    rotate: 0,
+                    boxShadow: draggingId === note.id ? '0 25px 50px rgba(0,0,0,0.4)' : 'none',
+                  }}
+                  exit={{ opacity: 0, scale: 0.3, rotate: 15, transition: { duration: 0.2 } }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                  className={`absolute w-64 h-64 p-5 rounded-2xl border backdrop-blur-xl flex flex-col gap-3 group ${COLOR_MAP[note.color] || COLOR_MAP.yellow} ${draggingId === note.id ? 'z-50 cursor-grabbing' : 'cursor-grab z-10 hover:z-40'}`}
+                  style={{ left: note.x, top: note.y }}
+                  onPointerDown={(e) => {
+                    if (e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+                      handlePointerDown(e, note.id);
+                    }
+                  }}
+                >
+                  <div className="w-full flex justify-between items-center shrink-0 mb-1">
+                    <div className="w-12 h-2 bg-white/20 rounded-full mx-auto cursor-grab active:cursor-grabbing"></div>
+                    <motion.button 
+                      onClick={() => deleteNote(note.id)}
+                      whileHover={{ scale: 1.2 }}
+                      whileTap={{ scale: 0.8 }}
+                      className="opacity-0 group-hover:opacity-100 text-white/50 hover:text-red-400 transition-all p-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </motion.button>
+                  </div>
+                  
+                  <textarea 
+                    value={note.text}
+                    onChange={(e) => updateText(note.id, e.target.value)}
+                    placeholder="Write something..."
+                    className="w-full h-full bg-transparent border-none resize-none focus:outline-none custom-scrollbar outline-none font-medium"
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            {notes.length === 0 && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="absolute inset-0 flex items-center justify-center text-gray-500 pointer-events-none"
+              >
+                Click 'New Note' to create your first sticky note
+              </motion.div>
+            )}
+          </>
+        )}
       </motion.div>
     </div>
   );

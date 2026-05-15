@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import youtube, ppt, todos, summarize, flashcards, code_explainer, dashboard, history, workflow, brain, exam_intelligence
+from app.routes import youtube, ppt, todos, summarize, flashcards, code_explainer, dashboard, history, workflow, brain, exam_intelligence, sticky_notes
 
 app = FastAPI(
     title="Student Productivity Hub API",
@@ -31,6 +31,7 @@ app.include_router(history.router)
 app.include_router(workflow.router)
 app.include_router(brain.router)
 app.include_router(exam_intelligence.router)
+app.include_router(sticky_notes.router)
 
 @app.get("/")
 async def root():

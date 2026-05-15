@@ -324,3 +324,52 @@ def get_exam_intelligence_results(user_id: str, access_token: str = None):
         print(f"[Supabase Error - exam_intelligence GET]: {e}")
     return []
 
+# --- Sticky Notes Helpers ---
+def save_sticky_note(user_id: str, text: str, color: str, x: float, y: float, access_token: str = None):
+    client = get_supabase(access_token)
+    if not client: return None
+    try:
+        record = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "text": text,
+            "color": color,
+            "x": x,
+            "y": y,
+        }
+        result = client.table("sticky_notes").insert(record).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        print(f"[Supabase Error - sticky_notes insert]: {e}")
+    return None
+
+def get_sticky_notes(user_id: str, access_token: str = None):
+    client = get_supabase(access_token)
+    if not client: return []
+    try:
+        result = client.table("sticky_notes").select("*").eq("user_id", user_id).order("created_at").execute()
+        return result.data
+    except Exception as e:
+        print(f"[Supabase Error - sticky_notes GET]: {e}")
+    return []
+
+def update_sticky_note(note_id: str, updates: dict, access_token: str = None):
+    client = get_supabase(access_token)
+    if not client: return None
+    try:
+        result = client.table("sticky_notes").update(updates).eq("id", note_id).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        print(f"[Supabase Error - sticky_notes UPDATE]: {e}")
+    return None
+
+def delete_sticky_note(note_id: str, access_token: str = None):
+    client = get_supabase(access_token)
+    if not client: return False
+    try:
+        client.table("sticky_notes").delete().eq("id", note_id).execute()
+        return True
+    except Exception as e:
+        print(f"[Supabase Error - sticky_notes DELETE]: {e}")
+    return False
+

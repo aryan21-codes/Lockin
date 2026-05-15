@@ -1,0 +1,41 @@
+import React from 'react';
+
+const LogoIcon = ({ className = "w-[18px] h-[18px]" }) => (
+  <svg viewBox="80 50 240 260" className={className} xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="mainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style={{stopColor: '#6366f1', stopOpacity: 1}} />
+        <stop offset="100%" style={{stopColor: '#a855f7', stopOpacity: 1}} />
+      </linearGradient>
+      <filter id="glassBlur" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="5" />
+      </filter>
+      <linearGradient id="glassStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" style={{stopColor: 'white', stopOpacity: 0.4}} />
+        <stop offset="100%" style={{stopColor: 'white', stopOpacity: 0.1}} />
+      </linearGradient>
+    </defs>
+    
+    {/* Padlock Base */}
+    <rect x="100" y="140" width="200" height="160" rx="40" fill="url(#mainGrad)" />
+    
+    {/* Glassmorphic Overlay */}
+    <rect x="100" y="140" width="200" height="160" rx="40" fill="rgba(255,255,255,0.05)" stroke="url(#glassStroke)" strokeWidth="2" style={{backdropFilter: 'blur(10px)'}} />
+    
+    {/* Shackle (Lock top) */}
+    <path d="M 150 140 Q 150 60 200 60 Q 250 60 250 140" stroke="white" strokeWidth="12" fill="none" opacity="0.3" />
+    
+    {/* Brain/Neural Pattern inside Lock */}
+    <path d="M160 220 Q 180 180 200 220 T 240 220" stroke="white" strokeWidth="4" fill="none" opacity="0.6">
+      <animate attributeName="stroke-dasharray" from="0, 100" to="100, 0" dur="3s" repeatCount="indefinite" />
+    </path>
+    <circle cx="200" cy="220" r="15" fill="white" opacity="0.8">
+      <animate attributeName="r" values="12;16;12" dur="2s" repeatCount="indefinite" />
+    </circle>
+    
+    {/* Glow Effect */}
+    <circle cx="200" cy="220" r="40" fill="url(#mainGrad)" filter="url(#glassBlur)" opacity="0.4" />
+  </svg>
+);
+
+export default LogoIcon;

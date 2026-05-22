@@ -1,6 +1,6 @@
 import { useAuth } from '../context/AuthContext';
 import React, { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { useDashboardData } from '../hooks/useApiQuery';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import StatCard from '../components/StatCard';
@@ -13,19 +13,23 @@ import {
 
 // Skeletons imported from components/ui/SkeletonLoader
 
+const defaultStats = {
+  notes_count: 0,
+  videos_count: 0,
+  ppt_count: 0,
+  flashcards_count: 0,
+  tasks_completed: 0
+};
+
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [stats, setStats] = useState({
-    notes_count: 0,
-    videos_count: 0,
-    ppt_count: 0,
-    flashcards_count: 0,
-    tasks_completed: 0
-  });
-  const [activity, setActivity] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [showQuickActions, setShowQuickActions] = useState(false);
+
+  // ─── React Query: single combined fetch, cached for 2 min ───
+  const { data, isLoading } = useDashboardData();
+  const stats = data?.stats || defaultStats;
+  const activity = data?.activity || [];
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -38,26 +42,6 @@ const Dashboard = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user?.id) return;
-      try {
-        const [statsRes, activityRes] = await Promise.all([
-          api.get(`/api/dashboard/stats`),
-          api.get(`/api/dashboard/activity`)
-        ]);
-        
-        if (statsRes.data.success) setStats(statsRes.data.data);
-        if (activityRes.data.success) setActivity(activityRes.data.data);
-      } catch (error) {
-        console.error("Dashboard fetch error:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
-  }, [user]);
 
   const firstName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Guest';
   

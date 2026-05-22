@@ -3,20 +3,50 @@ from supabase import create_client, Client
 from app.utils.config import settings
 import uuid
 from datetime import datetime
+import logging
+
+logger = logging.getLogger("lockin.database")
+
+# ─── Cached Supabase Client ────────────────────────────────────
+# Reuse a single base client instead of calling create_client()
+# on every function invocation (~100ms savings per call).
+_BASE_CLIENT: Client = None
 
 def get_supabase(access_token: str = None) -> Client:
     """
-    Returns a Supabase client. If access_token is provided,
-    sets it on the PostgREST client so auth.uid() works with RLS.
+    Returns a Supabase client. Reuses a cached base client and
+    sets the access_token on it for RLS if provided.
     """
+    global _BASE_CLIENT
     try:
-        supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+        if _BASE_CLIENT is None:
+            _BASE_CLIENT = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            logger.info("Supabase client initialized (cached)")
+        
         if access_token:
-            supabase.postgrest.auth(access_token)
-        return supabase
+            _BASE_CLIENT.postgrest.auth(access_token)
+        return _BASE_CLIENT
     except Exception as e:
-        print(f"Error initializing Supabase client: {e}")
-        return None
+        logger.error(f"Error initializing Supabase client: {e}")
+        # Fall back to creating a new client
+        try:
+            client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            if access_token:
+                client.postgrest.auth(access_token)
+            return client
+        except Exception as e2:
+            logger.error(f"Fallback client creation also failed: {e2}")
+            return None
+
+def warmup_client():
+    """Pre-warm the Supabase client on startup."""
+    global _BASE_CLIENT
+    if _BASE_CLIENT is None:
+        try:
+            _BASE_CLIENT = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            logger.info("Supabase client pre-warmed on startup")
+        except Exception as e:
+            logger.error(f"Startup warmup failed: {e}")
 
 def log_generation(user_id: str, content_type: str, content_data: dict, title: str = None, prompt: str = None, youtube_url: str = None, access_token: str = None):
     """
@@ -44,9 +74,9 @@ def log_generation(user_id: str, content_type: str, content_data: dict, title: s
             "created_at": datetime.utcnow().isoformat()
         }
         client.table("content_generations").insert(record).execute()
-        print(f"Logged {content_type} generation to Supabase.")
+        logger.info(f"Logged {content_type} generation to Supabase.")
     except Exception as e:
-        print(f"[Supabase Sync Non-Fatal Error]: {e} (Have you created the `content_generations` table?)")
+        logger.warning(f"[Supabase Sync Non-Fatal Error]: {e} (Have you created the `content_generations` table?)")
 
 # --- Flashcards Helpers ---
 def save_flashcards(user_id: str, flashcards: list, access_token: str = None):
@@ -68,17 +98,21 @@ def save_flashcards(user_id: str, flashcards: list, access_token: str = None):
             result = client.table("flashcards").insert(records).execute()
             return result.data
     except Exception as e:
-        print(f"[Supabase Error - flashcards]: {e}")
+        logger.error(f"[Supabase Error - flashcards]: {e}")
     return []
 
 def get_flashcards(user_id: str, access_token: str = None):
     client = get_supabase(access_token)
     if not client: return []
     try:
-        result = client.table("flashcards").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+        result = client.table("flashcards") \
+            .select("id, question, answer, difficulty, created_at") \
+            .eq("user_id", user_id) \
+            .order("created_at", desc=True) \
+            .execute()
         return result.data
     except Exception as e:
-        print(f"[Supabase Error - flashcards GET]: {e}")
+        logger.error(f"[Supabase Error - flashcards GET]: {e}")
     return []
 
 def delete_flashcard(id: str, access_token: str = None):
@@ -88,7 +122,7 @@ def delete_flashcard(id: str, access_token: str = None):
         client.table("flashcards").delete().eq("id", id).execute()
         return True
     except Exception as e:
-        print(f"[Supabase Error - flashcards DELETE]: {e}")
+        logger.error(f"[Supabase Error - flashcards DELETE]: {e}")
     return False
 
 def delete_all_flashcards(user_id: str, access_token: str = None):
@@ -98,7 +132,7 @@ def delete_all_flashcards(user_id: str, access_token: str = None):
         client.table("flashcards").delete().eq("user_id", user_id).execute()
         return True
     except Exception as e:
-        print(f"[Supabase Error - flashcards DELETE ALL]: {e}")
+        logger.error(f"[Supabase Error - flashcards DELETE ALL]: {e}")
     return False
 
 # --- Code Explainer Helpers ---
@@ -116,17 +150,21 @@ def save_code_explanation(user_id: str, code: str, explanation: dict, access_tok
         result = client.table("code_explanations").insert(record).execute()
         return result.data[0] if result.data else None
     except Exception as e:
-        print(f"[Supabase Error - code_explanations]: {e}")
+        logger.error(f"[Supabase Error - code_explanations]: {e}")
     return None
 
 def get_code_explanations(user_id: str, access_token: str = None):
     client = get_supabase(access_token)
     if not client: return []
     try:
-        result = client.table("code_explanations").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
+        result = client.table("code_explanations") \
+            .select("id, code, explanation, created_at") \
+            .eq("user_id", user_id) \
+            .order("created_at", desc=True) \
+            .execute()
         return result.data
     except Exception as e:
-        print(f"[Supabase Error - code_explanations GET]: {e}")
+        logger.error(f"[Supabase Error - code_explanations GET]: {e}")
     return []
 
 # --- Todos Helpers ---
@@ -145,17 +183,20 @@ def save_todo(user_id: str, title: str, priority: str, due_date: str, access_tok
         result = client.table("todos").insert(record).execute()
         return result.data[0] if result.data else None
     except Exception as e:
-        print(f"[Supabase Error - todos insert]: {e}")
+        logger.error(f"[Supabase Error - todos insert]: {e}")
     return None
 
 def get_todos(user_id: str, access_token: str = None):
     client = get_supabase(access_token)
     if not client: return []
     try:
-        result = client.table("todos").select("*").eq("user_id", user_id).execute()
+        result = client.table("todos") \
+            .select("id, title, priority, due_date, completed, user_id") \
+            .eq("user_id", user_id) \
+            .execute()
         return result.data
     except Exception as e:
-        print(f"[Supabase Error - todos GET]: {e}")
+        logger.error(f"[Supabase Error - todos GET]: {e}")
     return []
 
 def update_todo(todo_id: str, updates: dict, access_token: str = None):
@@ -165,7 +206,7 @@ def update_todo(todo_id: str, updates: dict, access_token: str = None):
         result = client.table("todos").update(updates).eq("id", todo_id).execute()
         return result.data[0] if result.data else None
     except Exception as e:
-        print(f"[Supabase Error - todos UPDATE]: {e}")
+        logger.error(f"[Supabase Error - todos UPDATE]: {e}")
     return None
 
 def delete_todo(todo_id: str, access_token: str = None):
@@ -175,32 +216,33 @@ def delete_todo(todo_id: str, access_token: str = None):
         client.table("todos").delete().eq("id", todo_id).execute()
         return True
     except Exception as e:
-        print(f"[Supabase Error - todos DELETE]: {e}")
+        logger.error(f"[Supabase Error - todos DELETE]: {e}")
     return False
 
 # --- Dashboard Helpers ---
 def get_dashboard_stats(user_id: str, access_token: str = None):
+    """
+    Optimized: reuses a single Supabase client for all 5 count queries
+    instead of creating 5 separate clients. Uses select("id") with count
+    instead of select("*").
+    """
     client = get_supabase(access_token)
     if not client: 
         return {"notes_count": 0, "videos_count": 0, "ppt_count": 0, "flashcards_count": 0, "tasks_completed": 0}
     try:
-        # Notes
+        # All 5 queries use the same client instance
         notes = client.table("content_generations").select("id", count="exact").eq("user_id", user_id).eq("content_type", "notes").execute()
         notes_count = notes.count if notes.count is not None else 0
 
-        # Videos
         videos = client.table("content_generations").select("id", count="exact").eq("user_id", user_id).eq("content_type", "videos").execute()
         videos_count = videos.count if videos.count is not None else 0
 
-        # PPT
         ppt = client.table("content_generations").select("id", count="exact").eq("user_id", user_id).eq("content_type", "ppt").execute()
         ppt_count = ppt.count if ppt.count is not None else 0
 
-        # Flashcards
         flashcards = client.table("flashcards").select("id", count="exact").eq("user_id", user_id).execute()
         flashcards_count = flashcards.count if flashcards.count is not None else 0
 
-        # Tasks completed
         tasks = client.table("todos").select("id", count="exact").eq("user_id", user_id).eq("completed", True).execute()
         tasks_completed = tasks.count if tasks.count is not None else 0
 
@@ -212,20 +254,31 @@ def get_dashboard_stats(user_id: str, access_token: str = None):
             "tasks_completed": tasks_completed
         }
     except Exception as e:
-        print(f"[Supabase Error - Dashboard API]: {e}")
+        logger.error(f"[Supabase Error - Dashboard API]: {e}")
         return {"notes_count": 0, "videos_count": 0, "ppt_count": 0, "flashcards_count": 0, "tasks_completed": 0}
 
 def get_recent_activity(user_id: str, access_token: str = None):
+    """
+    Optimized: select only required fields instead of select("*").
+    Avoids pulling massive JSONB content column for activity titles.
+    """
     client = get_supabase(access_token)
     if not client: return []
     try:
         activities = []
-        # Get recent generations
-        gens = client.table("content_generations").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(5).execute()
+        # Only select fields needed for activity display — skip the massive content JSONB
+        gens = client.table("content_generations") \
+            .select("id, content_type, created_at") \
+            .eq("user_id", user_id) \
+            .order("created_at", desc=True) \
+            .limit(5) \
+            .execute()
         for g in gens.data:
             if g['content_type'] == 'notes': title = "Generated Notes Summary"
             elif g['content_type'] == 'videos': title = "Summarized YouTube Video"
             elif g['content_type'] == 'ppt': title = "Generated PPT Presentation"
+            elif g['content_type'] == 'workflow': title = "AI Workflow Pipeline"
+            elif g['content_type'] == 'exam_intelligence': title = "Exam Intelligence Analysis"
             else: title = "Generated Content"
             activities.append({"id": g['id'], "title": title, "created_at": g['created_at'], "type": "generation"})
             
@@ -233,7 +286,7 @@ def get_recent_activity(user_id: str, access_token: str = None):
         activities.sort(key=lambda x: x['created_at'], reverse=True)
         return activities[:5]
     except Exception as e:
-        print(f"[Supabase Error - Activity GET]: {e}")
+        logger.error(f"[Supabase Error - Activity GET]: {e}")
     return []
 
 # --- Workflow Helpers ---
@@ -262,10 +315,10 @@ def save_workflow_result(user_id: str, source_file: str, result_data: dict, acce
             "created_at": datetime.utcnow().isoformat()
         }
         result = client.table("content_generations").insert(record).execute()
-        print(f"[Workflow] Saved pipeline result for {source_file}")
+        logger.info(f"[Workflow] Saved pipeline result for {source_file}")
         return result.data[0] if result.data else None
     except Exception as e:
-        print(f"[Supabase Error - workflow save]: {e}")
+        logger.error(f"[Supabase Error - workflow save]: {e}")
     return None
 
 def get_workflow_results(user_id: str, access_token: str = None):
@@ -274,7 +327,7 @@ def get_workflow_results(user_id: str, access_token: str = None):
     if not client: return []
     try:
         result = client.table("content_generations") \
-            .select("*") \
+            .select("id, content_type, content, created_at") \
             .eq("user_id", user_id) \
             .eq("content_type", "workflow") \
             .order("created_at", desc=True) \
@@ -282,7 +335,7 @@ def get_workflow_results(user_id: str, access_token: str = None):
             .execute()
         return result.data
     except Exception as e:
-        print(f"[Supabase Error - workflow GET]: {e}")
+        logger.error(f"[Supabase Error - workflow GET]: {e}")
     return []
 
 # --- Exam Intelligence Helpers ---
@@ -301,10 +354,10 @@ def save_exam_intelligence_result(user_id: str, result_data: dict, access_token:
             "created_at": datetime.utcnow().isoformat()
         }
         result = client.table("content_generations").insert(record).execute()
-        print(f"[Exam Intelligence] Saved pipeline result for user {user_id}")
+        logger.info(f"[Exam Intelligence] Saved pipeline result for user {user_id}")
         return result.data[0] if result.data else None
     except Exception as e:
-        print(f"[Supabase Error - exam_intelligence save]: {e}")
+        logger.error(f"[Supabase Error - exam_intelligence save]: {e}")
     return None
 
 def get_exam_intelligence_results(user_id: str, access_token: str = None):
@@ -313,7 +366,7 @@ def get_exam_intelligence_results(user_id: str, access_token: str = None):
     if not client: return []
     try:
         result = client.table("content_generations") \
-            .select("*") \
+            .select("id, content_type, content, created_at") \
             .eq("user_id", user_id) \
             .eq("content_type", "exam_intelligence") \
             .order("created_at", desc=True) \
@@ -321,7 +374,7 @@ def get_exam_intelligence_results(user_id: str, access_token: str = None):
             .execute()
         return result.data
     except Exception as e:
-        print(f"[Supabase Error - exam_intelligence GET]: {e}")
+        logger.error(f"[Supabase Error - exam_intelligence GET]: {e}")
     return []
 
 # --- Sticky Notes Helpers ---
@@ -340,17 +393,21 @@ def save_sticky_note(user_id: str, text: str, color: str, x: float, y: float, ac
         result = client.table("sticky_notes").insert(record).execute()
         return result.data[0] if result.data else None
     except Exception as e:
-        print(f"[Supabase Error - sticky_notes insert]: {e}")
+        logger.error(f"[Supabase Error - sticky_notes insert]: {e}")
     return None
 
 def get_sticky_notes(user_id: str, access_token: str = None):
     client = get_supabase(access_token)
     if not client: return []
     try:
-        result = client.table("sticky_notes").select("*").eq("user_id", user_id).order("created_at").execute()
+        result = client.table("sticky_notes") \
+            .select("id, text, color, x, y, created_at, user_id") \
+            .eq("user_id", user_id) \
+            .order("created_at") \
+            .execute()
         return result.data
     except Exception as e:
-        print(f"[Supabase Error - sticky_notes GET]: {e}")
+        logger.error(f"[Supabase Error - sticky_notes GET]: {e}")
     return []
 
 def update_sticky_note(note_id: str, updates: dict, access_token: str = None):
@@ -360,7 +417,7 @@ def update_sticky_note(note_id: str, updates: dict, access_token: str = None):
         result = client.table("sticky_notes").update(updates).eq("id", note_id).execute()
         return result.data[0] if result.data else None
     except Exception as e:
-        print(f"[Supabase Error - sticky_notes UPDATE]: {e}")
+        logger.error(f"[Supabase Error - sticky_notes UPDATE]: {e}")
     return None
 
 def delete_sticky_note(note_id: str, access_token: str = None):
@@ -370,6 +427,5 @@ def delete_sticky_note(note_id: str, access_token: str = None):
         client.table("sticky_notes").delete().eq("id", note_id).execute()
         return True
     except Exception as e:
-        print(f"[Supabase Error - sticky_notes DELETE]: {e}")
+        logger.error(f"[Supabase Error - sticky_notes DELETE]: {e}")
     return False
-

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '../lib/api';
+import { useHistoryData } from '../hooks/useApiQuery';
 import { useNavigate } from 'react-router-dom';
 import { 
   History as HistoryIcon, FileText, MonitorPlay, Presentation, Layers, Terminal, 
@@ -10,10 +10,9 @@ import SkeletonLoader from '../components/ui/SkeletonLoader';
 
 const HistoryPage = () => {
   const [activeTab, setActiveTab] = useState('workflow');
-  const [logs, setLogs] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const navigate = useNavigate();
+  const loadMoreRef = useRef(null);
 
   const tabs = [
     { id: 'workflow', label: 'AI Workflows', icon: Zap, color: 'text-cyan-400' },
@@ -24,24 +23,37 @@ const HistoryPage = () => {
     { id: 'code_explainer', label: 'Code Explanations', icon: Terminal, color: 'text-neonBlue' }
   ];
 
+  // ─── React Query infinite scroll ──────────────────────────────
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useHistoryData(activeTab);
+
+  // Flatten paginated data into a single array
+  const logs = data?.pages?.flat() || [];
+
+  // Reset expanded state when switching tabs
   useEffect(() => {
-    fetchHistoryData();
+    setExpandedId(null);
   }, [activeTab]);
 
-  const fetchHistoryData = async () => {
-    setIsLoading(true);
-    setExpandedId(null);
-    try {
-      const resp = await api.get(`/api/history/${activeTab}`);
-      if (resp.data.success) {
-        setLogs(resp.data.data || []);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // ─── Intersection Observer for infinite scroll ────────────────
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const toggleExpand = (id) => {
     setExpandedId(prev => prev === id ? null : id);
@@ -60,7 +72,7 @@ const HistoryPage = () => {
         key={log.id}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: idx * 0.04 }}
+        transition={{ delay: Math.min(idx * 0.04, 0.4) }}
         layout
         className="rounded-2xl border border-white/[0.06] bg-white/[0.02] overflow-hidden"
       >
@@ -212,7 +224,7 @@ const HistoryPage = () => {
       key={log.id}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: idx * 0.05 }}
+      transition={{ delay: Math.min(idx * 0.05, 0.4) }}
       whileHover={{ scale: 1.01, transition: { duration: 0.2 } }}
       className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl flex flex-col md:flex-row gap-4 justify-between"
     >
@@ -315,13 +327,30 @@ const HistoryPage = () => {
               exit={{ opacity: 0, y: -10 }}
               className="flex flex-col gap-3"
             >
-              <AnimatePresence>
-                {logs.map((log, idx) => (
-                  activeTab === 'workflow' 
-                    ? <WorkflowCard key={log.id} log={log} idx={idx} />
-                    : <GenericCard key={log.id} log={log} idx={idx} />
-                ))}
-              </AnimatePresence>
+              {logs.map((log, idx) => (
+                activeTab === 'workflow' 
+                  ? <WorkflowCard key={log.id} log={log} idx={idx} />
+                  : <GenericCard key={log.id} log={log} idx={idx} />
+              ))}
+              
+              {/* Infinite scroll trigger + Load More button */}
+              <div ref={loadMoreRef} className="py-4 flex justify-center">
+                {isFetchingNextPage ? (
+                  <div className="flex items-center gap-2 text-gray-500 text-[13px]">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading more…
+                  </div>
+                ) : hasNextPage ? (
+                  <button
+                    onClick={() => fetchNextPage()}
+                    className="px-6 py-2 text-[13px] font-medium text-gray-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.06] border border-white/[0.06] rounded-xl transition-all"
+                  >
+                    Load more
+                  </button>
+                ) : logs.length > 10 ? (
+                  <p className="text-[12px] text-gray-600">You've reached the end</p>
+                ) : null}
+              </div>
             </motion.div>
           ) : (
             <motion.div 

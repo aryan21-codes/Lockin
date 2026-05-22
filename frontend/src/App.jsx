@@ -1,22 +1,36 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
-import YouTubeSummarizer from './pages/YouTubeSummarizer';
-import PPTGenerator from './pages/PPTGenerator';
-import TodoList from './pages/TodoList';
-import NotesSummarizer from './pages/NotesSummarizer';
-import StickyNotes from './pages/StickyNotes';
 import Auth from './pages/Auth';
-import FlashcardsPage from './pages/FlashcardsPage';
-import CodeExplainerPage from './pages/CodeExplainerPage';
-import HistoryPage from './pages/History';
-import AIWorkflow from './pages/AIWorkflow';
-import ExamIntelligence from './pages/ExamIntelligence';
-import SecondBrain from './pages/SecondBrain';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './components/ui/Toast';
+
+// ─── Lazy-loaded pages ────────────────────────────────────────
+// Only Dashboard and Auth are eagerly loaded for fastest first paint.
+// All other pages are code-split and loaded on demand.
+const YouTubeSummarizer = React.lazy(() => import('./pages/YouTubeSummarizer'));
+const PPTGenerator = React.lazy(() => import('./pages/PPTGenerator'));
+const TodoList = React.lazy(() => import('./pages/TodoList'));
+const NotesSummarizer = React.lazy(() => import('./pages/NotesSummarizer'));
+const StickyNotes = React.lazy(() => import('./pages/StickyNotes'));
+const FlashcardsPage = React.lazy(() => import('./pages/FlashcardsPage'));
+const CodeExplainerPage = React.lazy(() => import('./pages/CodeExplainerPage'));
+const HistoryPage = React.lazy(() => import('./pages/History'));
+const AIWorkflow = React.lazy(() => import('./pages/AIWorkflow'));
+const ExamIntelligence = React.lazy(() => import('./pages/ExamIntelligence'));
+const SecondBrain = React.lazy(() => import('./pages/SecondBrain'));
+
+// ─── Page Loading Skeleton ────────────────────────────────────
+const PageSkeleton = () => (
+  <div className="w-full h-full min-h-[60vh] flex items-center justify-center">
+    <div className="flex flex-col items-center gap-4">
+      <div className="w-10 h-10 rounded-full border-2 border-primary/20 border-t-primary animate-spin"></div>
+      <span className="text-xs text-gray-600 font-medium tracking-wide">Loading module…</span>
+    </div>
+  </div>
+);
 
 const PlaceholderContent = ({ title }) => (
   <div className="flex h-full items-center justify-center text-gray-500 animate-in fade-in duration-500">
@@ -56,17 +70,17 @@ function App() {
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route index element={<Dashboard />} />
-              <Route path="notes" element={<NotesSummarizer />} />
-              <Route path="youtube" element={<YouTubeSummarizer />} />
-              <Route path="ppt" element={<PPTGenerator />} />
-              <Route path="todos" element={<TodoList />} />
-              <Route path="sticky" element={<StickyNotes />} />
-              <Route path="flashcards" element={<FlashcardsPage />} />
-              <Route path="code-explainer" element={<CodeExplainerPage />} />
-              <Route path="history" element={<HistoryPage />} />
-              <Route path="workflow" element={<AIWorkflow />} />
-              <Route path="exam-intelligence" element={<ExamIntelligence />} />
-              <Route path="brain" element={<SecondBrain />} />
+              <Route path="notes" element={<Suspense fallback={<PageSkeleton />}><NotesSummarizer /></Suspense>} />
+              <Route path="youtube" element={<Suspense fallback={<PageSkeleton />}><YouTubeSummarizer /></Suspense>} />
+              <Route path="ppt" element={<Suspense fallback={<PageSkeleton />}><PPTGenerator /></Suspense>} />
+              <Route path="todos" element={<Suspense fallback={<PageSkeleton />}><TodoList /></Suspense>} />
+              <Route path="sticky" element={<Suspense fallback={<PageSkeleton />}><StickyNotes /></Suspense>} />
+              <Route path="flashcards" element={<Suspense fallback={<PageSkeleton />}><FlashcardsPage /></Suspense>} />
+              <Route path="code-explainer" element={<Suspense fallback={<PageSkeleton />}><CodeExplainerPage /></Suspense>} />
+              <Route path="history" element={<Suspense fallback={<PageSkeleton />}><HistoryPage /></Suspense>} />
+              <Route path="workflow" element={<Suspense fallback={<PageSkeleton />}><AIWorkflow /></Suspense>} />
+              <Route path="exam-intelligence" element={<Suspense fallback={<PageSkeleton />}><ExamIntelligence /></Suspense>} />
+              <Route path="brain" element={<Suspense fallback={<PageSkeleton />}><SecondBrain /></Suspense>} />
             </Route>
           </Routes>
           <Analytics />

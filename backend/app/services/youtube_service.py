@@ -27,12 +27,13 @@ def fetch_timestamped_transcript(video_id: str) -> str:
         
     return "\n".join(formatted)
 
-async def summarize_youtube_video(url: str, user_id: str = "anonymous", model="openai/gpt-4o-mini") -> dict:
+async def summarize_youtube_video(url: str, user_id: str = "anonymous", model="openai/gpt-4o-mini", transcript: str = None) -> dict:
     video_id = extract_video_id(url)
-    try:
-        transcript = fetch_timestamped_transcript(video_id)
-    except Exception as e:
-        raise ValueError(f"Failed to fetch transcript (video might not have captions enabled): {e}")
+    if not transcript:
+        try:
+            transcript = fetch_timestamped_transcript(video_id)
+        except Exception as e:
+            raise ValueError(f"Failed to fetch transcript (video might not have captions enabled): {e}")
 
     # Chunking
     chunks = chunk_text(transcript, chunk_size=80000, overlap=1000)

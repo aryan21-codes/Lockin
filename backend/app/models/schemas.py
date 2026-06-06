@@ -13,6 +13,7 @@ class SummarizeRequest(BaseModel):
 
 class YoutubeSummarizeRequest(BaseModel):
     url: str
+    transcript: Optional[str] = None
 
 class PPTRequest(BaseModel):
     prompt: str

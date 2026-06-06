@@ -47,6 +47,8 @@ const TodoList = () => {
         setNewTask('');
         setPriority('medium');
         toast.success('Task added!');
+      } else {
+        toast.error(response.data.message || 'Failed to add task');
       }
     } catch (err) {
       console.error(err);
@@ -65,9 +67,14 @@ const TodoList = () => {
     }
     
     try {
-      await api.put(`/api/todos/${id}`, { completed: newCompleted });
+      const response = await api.put(`/api/todos/${id}`, { completed: newCompleted });
+      if (!response.data.success) {
+        toast.error(response.data.message || 'Failed to update task');
+        setTodos(todos.map(t => t.id === id ? { ...t, completed: !newCompleted } : t));
+      }
     } catch (err) {
       console.error(err);
+      toast.error('Failed to update task');
       setTodos(todos.map(t => t.id === id ? { ...t, completed: !newCompleted } : t));
     }
   };
@@ -76,10 +83,16 @@ const TodoList = () => {
     const prevTodos = [...todos];
     setTodos(todos.filter(todo => todo.id !== id));
     try {
-      await api.delete(`/api/todos/${id}`);
-      toast.info('Task deleted');
+      const response = await api.delete(`/api/todos/${id}`);
+      if (response.data.success) {
+        toast.info('Task deleted');
+      } else {
+        toast.error(response.data.message || 'Failed to delete task');
+        setTodos(prevTodos);
+      }
     } catch (err) {
       console.error(err);
+      toast.error('Failed to delete task');
       setTodos(prevTodos);
     }
   };

@@ -13,6 +13,8 @@ const YouTubeSummarizer = () => {
   const [loadingStep, setLoadingStep] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [showFallback, setShowFallback] = useState(false);
+  const [manualTranscript, setManualTranscript] = useState('');
   const toast = useToast();
 
   const handleSummarize = async (e) => {
@@ -32,10 +34,65 @@ const YouTubeSummarizer = () => {
       const response = await api.post('/api/youtube/summarize', { url });
       if (response.data.success) {
         setResult(response.data.data);
+        setShowFallback(false);
         toast.success('Video summarized successfully!', 'AI Complete');
       } else {
-        setError(response.data.message || 'Failed to summarize video');
-        toast.error(response.data.message || 'Failed to summarize video');
+        const errorMsg = response.data.message || 'Failed to summarize video';
+        setError(errorMsg);
+        toast.error(errorMsg);
+        if (
+          errorMsg.toLowerCase().includes('transcript') || 
+          errorMsg.toLowerCase().includes('ip') || 
+          errorMsg.toLowerCase().includes('block') || 
+          errorMsg.toLowerCase().includes('429')
+        ) {
+          setShowFallback(true);
+        }
+      }
+    } catch (err) {
+      const errorMsg = err.message || 'An error occurred';
+      setError(errorMsg);
+      toast.error(errorMsg);
+      if (
+        errorMsg.toLowerCase().includes('transcript') || 
+        errorMsg.toLowerCase().includes('ip') || 
+        errorMsg.toLowerCase().includes('block') || 
+        errorMsg.toLowerCase().includes('429')
+      ) {
+        setShowFallback(true);
+      }
+    } finally {
+      clearInterval(stepTimer);
+      setIsLoading(false);
+    }
+  };
+
+  const handleSummarizeWithTranscript = async (e) => {
+    e.preventDefault();
+    if (!url || !manualTranscript.trim()) return;
+    
+    setIsLoading(true);
+    setLoadingStep(0);
+    setError('');
+    setResult(null);
+    
+    const stepTimer = setInterval(() => {
+      setLoadingStep(prev => Math.min(prev + 1, 2));
+    }, 2500);
+    
+    try {
+      const response = await api.post('/api/youtube/summarize', { 
+        url, 
+        transcript: manualTranscript 
+      });
+      if (response.data.success) {
+        setResult(response.data.data);
+        setShowFallback(false);
+        setManualTranscript('');
+        toast.success('Video summarized using pasted transcript!', 'AI Complete');
+      } else {
+        setError(response.data.message || 'Failed to summarize transcript');
+        toast.error(response.data.message || 'Failed to summarize transcript');
       }
     } catch (err) {
       setError(err.message || 'An error occurred');
@@ -67,7 +124,7 @@ const YouTubeSummarizer = () => {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="glass-panel p-6 rounded-2xl"
+        className="glass-panel p-6 rounded-2xl space-y-4"
       >
         <form onSubmit={handleSummarize} className="flex gap-4">
           <div className="relative flex-1">
@@ -92,14 +149,60 @@ const YouTubeSummarizer = () => {
         
         <AnimatePresence>
           {error && (
-            <motion.p 
+            <motion.div 
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
-              className="text-red-400 mt-4 text-sm"
+              className="text-red-400 mt-2 text-sm leading-relaxed"
             >
               {error}
-            </motion.p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showFallback && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="border-t border-white/5 pt-6 mt-4 space-y-4"
+            >
+              <div className="bg-red-500/5 border border-red-500/10 rounded-xl p-4 text-gray-300 text-sm space-y-2">
+                <h3 className="font-semibold text-white flex items-center gap-2">
+                  <span className="inline-block w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+                  Bypass Server Blocking (IP Block)
+                </h3>
+                <p>
+                  YouTube is currently blocking our cloud server's IP address. However, you can easily bypass this:
+                </p>
+                <ol className="list-decimal list-inside pl-1 space-y-1 text-gray-400">
+                  <li>Open the YouTube video in your browser.</li>
+                  <li>In the description, click "Show Transcript".</li>
+                  <li>Select all transcript text, copy it, and paste it below.</li>
+                </ol>
+              </div>
+
+              <form onSubmit={handleSummarizeWithTranscript} className="space-y-4">
+                <textarea
+                  placeholder="Paste YouTube transcript text here..."
+                  value={manualTranscript}
+                  onChange={(e) => setManualTranscript(e.target.value)}
+                  className="w-full bg-surfaceHover border border-white/10 rounded-xl p-4 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 min-h-[160px] transition-all text-sm leading-relaxed"
+                  required
+                />
+                <div className="flex justify-end">
+                  <AnimatedButton
+                    type="submit"
+                    disabled={isLoading || !manualTranscript.trim()}
+                    className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-6 py-3 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.2)] text-sm"
+                  >
+                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2 inline" /> : null}
+                    Summarize Pasted Transcript
+                  </AnimatedButton>
+                </div>
+              </form>
+            </motion.div>
           )}
         </AnimatePresence>
       </motion.div>

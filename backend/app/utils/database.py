@@ -14,17 +14,23 @@ _BASE_CLIENT: Client = None
 
 def get_supabase(access_token: str = None) -> Client:
     """
-    Returns a Supabase client. Reuses a cached base client and
-    sets the access_token on it for RLS if provided.
+    Returns a Supabase client.
+    - If access_token is provided, creates a fresh client instance specifically
+      for this request to prevent concurrent request race conditions and session bleeding.
+    - If access_token is None, reuses the cached base client for maximum performance.
     """
     global _BASE_CLIENT
     try:
+        if access_token:
+            # Create a dedicated client for this request's token
+            client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
+            client.postgrest.auth(access_token)
+            return client
+        
+        # Access token is None; use cached global client
         if _BASE_CLIENT is None:
             _BASE_CLIENT = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
             logger.info("Supabase client initialized (cached)")
-        
-        if access_token:
-            _BASE_CLIENT.postgrest.auth(access_token)
         return _BASE_CLIENT
     except Exception as e:
         logger.error(f"Error initializing Supabase client: {e}")

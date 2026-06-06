@@ -11,7 +11,7 @@ async def summarize_video(request: YoutubeSummarizeRequest, user: dict = Depends
     try:
         user_id = user["sub"]
         token = user.get("access_token")
-        ai_data = await summarize_youtube_video(request.url)
+        ai_data = await summarize_youtube_video(request.url, user_id=user_id, transcript=request.transcript)
         log_generation(user_id, "videos", {"url": request.url}, title="Summarized YouTube Video", youtube_url=request.url, access_token=token)
         return APIResponse(success=True, data=ai_data)
     except Exception as e:

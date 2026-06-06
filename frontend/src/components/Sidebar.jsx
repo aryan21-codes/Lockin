@@ -92,7 +92,11 @@ const Sidebar = () => {
   );
 
   return (
-    <aside className={`${isSidebarOpen ? 'w-60 px-3' : 'w-[68px] px-2'} h-full flex flex-col py-5 bg-background border-r border-white/[0.04] transition-all duration-300 z-20 shrink-0`}>
+    <aside className={`fixed inset-y-0 left-0 z-40 flex flex-col py-5 bg-background border-r border-white/[0.04] transition-all duration-300 shrink-0 h-full ${
+      isSidebarOpen 
+        ? 'translate-x-0 w-60 px-3' 
+        : '-translate-x-full w-60 pointer-events-none md:pointer-events-auto md:translate-x-0 md:w-[68px] md:px-2'
+    } md:relative md:inset-auto md:z-20`}>
       
       {/* Logo */}
       <motion.div 

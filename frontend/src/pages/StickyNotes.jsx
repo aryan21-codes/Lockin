@@ -18,6 +18,15 @@ const StickyNotes = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [draggingId, setDraggingId] = useState(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Debounce timers for auto-saving text and position changes
   const saveTimers = useRef({});
@@ -146,9 +155,9 @@ const StickyNotes = () => {
       <motion.header 
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex justify-between items-center mb-6 z-10 shrink-0"
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 z-10 shrink-0"
       >
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
             <motion.div whileHover={{ rotate: 10, scale: 1.1 }} transition={{ type: 'spring', stiffness: 300 }}>
               <StickyNote className="w-8 h-8 text-pink-500" />
@@ -160,7 +169,7 @@ const StickyNotes = () => {
         <AnimatedButton 
           onClick={addNote}
           variant="secondary"
-          className="px-6 py-3 rounded-xl border border-white/10 font-medium"
+          className="px-6 py-3 rounded-xl border border-white/10 font-medium w-full sm:w-auto flex justify-center"
         >
           <Plus className="w-5 h-5" /> New Note
         </AnimatedButton>
@@ -170,10 +179,12 @@ const StickyNotes = () => {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="flex-1 glass-panel rounded-2xl relative overflow-hidden bg-surface/30 cursor-crosshair touch-none"
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerLeave={handlePointerUp}
+        className={`flex-1 glass-panel rounded-2xl relative overflow-hidden bg-surface/30 ${
+          isMobile ? 'p-4 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 max-h-[calc(100vh-180px)]' : 'cursor-crosshair touch-none'
+        }`}
+        onPointerMove={isMobile ? undefined : handlePointerMove}
+        onPointerUp={isMobile ? undefined : handlePointerUp}
+        onPointerLeave={isMobile ? undefined : handlePointerUp}
       >
         {isLoading ? (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -188,15 +199,20 @@ const StickyNotes = () => {
                   initial={{ opacity: 0, scale: 0.5, rotate: -10 }}
                   animate={{ 
                     opacity: 1, 
-                    scale: draggingId === note.id ? 1.05 : 1, 
+                    scale: !isMobile && draggingId === note.id ? 1.05 : 1, 
                     rotate: 0,
-                    boxShadow: draggingId === note.id ? '0 25px 50px rgba(0,0,0,0.4)' : 'none',
+                    boxShadow: !isMobile && draggingId === note.id ? '0 25px 50px rgba(0,0,0,0.4)' : 'none',
                   }}
                   exit={{ opacity: 0, scale: 0.3, rotate: 15, transition: { duration: 0.2 } }}
                   transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                  className={`absolute w-64 h-64 p-5 rounded-2xl border backdrop-blur-xl flex flex-col gap-3 group ${COLOR_MAP[note.color] || COLOR_MAP.yellow} ${draggingId === note.id ? 'z-50 cursor-grabbing' : 'cursor-grab z-10 hover:z-40'}`}
-                  style={{ left: note.x, top: note.y }}
+                  className={`${
+                    isMobile ? 'relative w-full h-48' : 'absolute w-64 h-64 cursor-grab z-10 hover:z-40'
+                  } p-5 rounded-2xl border backdrop-blur-xl flex flex-col gap-3 group ${COLOR_MAP[note.color] || COLOR_MAP.yellow} ${
+                    !isMobile && draggingId === note.id ? 'z-50 cursor-grabbing' : ''
+                  }`}
+                  style={isMobile ? {} : { left: note.x, top: note.y }}
                   onPointerDown={(e) => {
+                    if (isMobile) return;
                     if (e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
                       handlePointerDown(e, note.id);
                     }

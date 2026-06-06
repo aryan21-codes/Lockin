@@ -7,8 +7,14 @@ import PageTransition from './ui/PageTransition';
 import { useStore } from '../store/useStore';
 
 const Layout = () => {
-  const { toggleSidebar } = useStore();
+  const { isSidebarOpen, setSidebarOpen, toggleSidebar } = useStore();
   const location = useLocation();
+
+  React.useEffect(() => {
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, [location.pathname]);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background noise-bg">
@@ -19,6 +25,12 @@ const Layout = () => {
       </div>
 
       <Sidebar />
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-[1]">
         <Navbar />
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 relative h-full w-full">

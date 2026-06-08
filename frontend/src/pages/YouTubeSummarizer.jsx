@@ -126,22 +126,22 @@ const YouTubeSummarizer = () => {
         transition={{ delay: 0.1 }}
         className="glass-panel p-6 rounded-2xl space-y-4"
       >
-        <form onSubmit={handleSummarize} className="flex gap-4">
-          <div className="relative flex-1">
+        <form onSubmit={handleSummarize} className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1 w-full">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
             <input 
               type="url" 
               placeholder="Paste YouTube URL here (e.g. https://youtube.com/watch?v=...)" 
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              className="w-full bg-surfaceHover border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 input-glow transition-all"
+              className="w-full bg-surfaceHover border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/50 input-glow transition-all text-sm"
               required
             />
           </div>
           <AnimatedButton
             type="submit"
             disabled={isLoading || !url}
-            className="bg-red-500 hover:bg-red-600 text-white px-8 py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+            className="bg-red-500 hover:bg-red-600 text-white px-8 py-4 rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.3)] w-full sm:w-auto flex justify-center items-center shrink-0"
           >
             {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Summarize'}
           </AnimatedButton>

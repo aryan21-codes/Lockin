@@ -128,7 +128,7 @@ const Dashboard = () => {
         {/* STATS */}
         <section>
           {isLoading ? (
-             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+             <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {[1, 2, 3, 4, 5].map((i) => <StatSkeleton key={i} />)}
              </div>
           ) : (
@@ -136,7 +136,7 @@ const Dashboard = () => {
                variants={containerVariants}
                initial="hidden"
                animate="show"
-               className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"
+               className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4"
             >
                <StatCard icon={FileText} label="Notes" value={stats.notes_count} colorClass="text-amber-400" delay={1} />
                <StatCard icon={MonitorPlay} label="Videos" value={stats.videos_count} colorClass="text-red-400" delay={2} />

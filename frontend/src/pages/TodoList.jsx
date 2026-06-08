@@ -257,7 +257,7 @@ const TodoList = () => {
                       onClick={() => deleteTodo(todo.id)}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      className="opacity-0 group-hover:opacity-100 p-2 text-gray-600 hover:text-red-400 hover:bg-red-500/[0.06] rounded-lg transition-all"
+                      className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-2 text-gray-600 hover:text-red-400 hover:bg-red-500/[0.06] rounded-lg transition-all shrink-0"
                     >
                       <Trash2 className="w-4 h-4" />
                     </motion.button>

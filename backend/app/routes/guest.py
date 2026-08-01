@@ -14,7 +14,7 @@ from app.utils.config import settings
 
 logger = logging.getLogger("lockin.guest")
 
-router = APIRouter(prefix="/auth", tags=["guest"])
+router = APIRouter(prefix="/api/auth", tags=["guest"])
 
 GUEST_TOKEN_EXPIRY_HOURS = 24
 GUEST_FEATURES = ["summarizer", "flashcards", "code_explainer", "ppt_generator"]

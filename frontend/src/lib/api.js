@@ -87,7 +87,7 @@ api.interceptors.response.use(
       if (status === 401 && detail === 'Guest session expired') {
         try {
           const reissueResp = await axios.post(
-            `${api.defaults.baseURL}/auth/guest`,
+            `${api.defaults.baseURL}/api/auth/guest`,
             {},
             { timeout: 10000 }
           );

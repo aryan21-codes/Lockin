@@ -424,7 +424,7 @@ const Auth = () => {
                     setGuestLoading(true);
                     setError(null);
                     try {
-                      const resp = await api.post('/auth/guest');
+                      const resp = await api.post('/api/auth/guest');
                       const { guest_token, expires_at, usage, limits } = resp.data;
                       startGuestSession(guest_token, expires_at, usage, limits);
                       navigate('/');

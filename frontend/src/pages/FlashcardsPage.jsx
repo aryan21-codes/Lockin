@@ -1,4 +1,5 @@
 import { useAuth } from '../context/AuthContext';
+import { useGuestStore } from '../store/useGuestStore';
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../lib/api';
@@ -11,6 +12,7 @@ import { useToast } from '../components/ui/Toast';
 
 const FlashcardsPage = () => {
   const { user } = useAuth();
+  const isGuest = useGuestStore(state => state.isGuest);
   
   const [activeTab, setActiveTab] = useState('text'); // 'text' or 'pdf'
   const [text, setText] = useState('');
@@ -27,13 +29,13 @@ const FlashcardsPage = () => {
   const toast = useToast();
 
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id || isGuest) {
       setInitialLoading(false);
     } else {
       setFlashcards([]);
       setInitialLoading(true);
     }
-  }, [user]);
+  }, [user, isGuest]);
 
   const handleGenerateText = async () => {
     try {
@@ -50,8 +52,9 @@ const FlashcardsPage = () => {
         toast.error(response.data.message || 'Generation failed');
       }
     } catch (err) {
-      setError(err.message || 'An error occurred');
-      toast.error(err.message || 'An error occurred');
+      const msg = err.response?.data?.detail?.message || err.response?.data?.message || err.message || 'An error occurred';
+      setError(msg);
+      toast.error(msg);
     }
   };
 
@@ -76,8 +79,9 @@ const FlashcardsPage = () => {
         toast.error(response.data.message || 'Generation failed');
       }
     } catch (err) {
-      setError(err.message || 'An error occurred');
-      toast.error(err.message || 'An error occurred');
+      const msg = err.response?.data?.detail?.message || err.response?.data?.message || err.message || 'An error occurred';
+      setError(msg);
+      toast.error(msg);
     }
   };
 

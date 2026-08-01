@@ -1,9 +1,16 @@
 import time
 import os
 import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from app.routes import youtube, ppt, todos, summarize, flashcards, code_explainer, dashboard, history, workflow, brain, exam_intelligence, sticky_notes
+from app.routes import guest
 
 # ─── Logging Configuration ─────────────────────────────────────
 logging.basicConfig(
@@ -13,11 +20,54 @@ logging.basicConfig(
 )
 logger = logging.getLogger("lockin")
 
+# ─── Rate Limiter (slowapi) ───────────────────────────────────
+limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+
+# ─── Lifespan (replaces deprecated on_event) ──────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown logic."""
+    logger.info("🚀 Starting Lockin API v2.1...")
+
+    # Pre-warm Supabase client
+    try:
+        from app.utils.database import warmup_client
+        warmup_client()
+        logger.info("✅ Supabase client pre-warmed")
+    except Exception as e:
+        logger.warning(f"⚠️ Supabase warmup failed: {e}")
+
+    # Pre-warm JWKS cache
+    try:
+        from app.dependencies.auth import get_jwks
+        get_jwks()
+        logger.info("✅ JWKS cache pre-warmed")
+    except Exception as e:
+        logger.warning(f"⚠️ JWKS warmup failed: {e}")
+
+    # Cleanup expired guest usage rows on startup
+    try:
+        from app.utils.database import cleanup_expired_guest_usage
+        deleted = cleanup_expired_guest_usage(hours=48)
+        logger.info(f"✅ Guest usage cleanup complete ({deleted} expired rows removed)")
+    except Exception as e:
+        logger.warning(f"⚠️ Guest usage cleanup failed: {e}")
+
+    logger.info("🟢 Lockin API ready to serve requests")
+    yield  # App runs here
+    logger.info("🔴 Lockin API shutting down")
+
+
 app = FastAPI(
     title="Student Productivity Hub API",
     description="Enterprise API with OpenAI and Supabase Integration",
-    version="2.0.0"
+    version="2.1.0",
+    lifespan=lifespan,
 )
+
+# Attach limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 
@@ -51,6 +101,7 @@ async def performance_middleware(request: Request, call_next):
     return response
 
 # ─── Route Registration ───────────────────────────────────────
+app.include_router(guest.router)        # Guest auth (POST /auth/guest)
 app.include_router(youtube.router)
 app.include_router(ppt.router)
 app.include_router(todos.router)
@@ -64,36 +115,9 @@ app.include_router(brain.router)
 app.include_router(exam_intelligence.router)
 app.include_router(sticky_notes.router)
 
-# ─── Startup Event ────────────────────────────────────────────
-@app.on_event("startup")
-async def startup_event():
-    """
-    Pre-warm expensive resources on startup to minimize cold-start
-    latency on Render/Railway free tier.
-    """
-    logger.info("🚀 Starting Lockin API v2.0...")
-    
-    # Pre-warm Supabase client (avoid ~100ms on first request)
-    try:
-        from app.utils.database import warmup_client
-        warmup_client()
-        logger.info("✅ Supabase client pre-warmed")
-    except Exception as e:
-        logger.warning(f"⚠️ Supabase warmup failed: {e}")
-    
-    # Pre-warm JWKS cache (avoid ~200ms on first auth request)
-    try:
-        from app.dependencies.auth import get_jwks
-        get_jwks()
-        logger.info("✅ JWKS cache pre-warmed")
-    except Exception as e:
-        logger.warning(f"⚠️ JWKS warmup failed: {e}")
-    
-    logger.info("🟢 Lockin API ready to serve requests")
-
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Student Productivity Hub API v2.0 (OpenAI Powered)"}
+    return {"message": "Welcome to Student Productivity Hub API v2.1 (OpenAI Powered)"}
 
 @app.get("/health")
 async def health_check():

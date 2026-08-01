@@ -435,3 +435,122 @@ def delete_sticky_note(note_id: str, access_token: str = None):
     except Exception as e:
         logger.error(f"[Supabase Error - sticky_notes DELETE]: {e}")
     return False
+
+
+# ─── Guest Usage Helpers ──────────────────────────────────────
+
+def check_and_increment_guest_usage(
+    guest_id: str,
+    ip_hash: str,
+    feature: str,
+    per_guest_limit: int = 3,
+    per_ip_limit: int = 15,
+) -> dict:
+    """
+    Check if a guest can use a feature, and increment the counter if allowed.
+    
+    Dual-layer enforcement:
+    - Per guest_id: max `per_guest_limit` uses per feature
+    - Per ip_hash (backstop): max `per_ip_limit` uses per feature across all guest_ids
+    
+    Returns: {"allowed": bool, "usage": {feature: count}, "remaining": int}
+    """
+    client = get_supabase()  # Use service-level client (no RLS)
+    if not client:
+        logger.error("Cannot check guest usage: no Supabase client")
+        return {"allowed": False, "usage": {}, "remaining": 0}
+
+    try:
+        # 1. Check IP-hash backstop: total usage across all guest_ids for this IP + feature
+        ip_result = client.table("guest_usage") \
+            .select("use_count") \
+            .eq("ip_hash", ip_hash) \
+            .eq("feature", feature) \
+            .execute()
+
+        ip_total = sum(row.get("use_count", 0) for row in (ip_result.data or []))
+        if ip_total >= per_ip_limit:
+            logger.warning(f"IP backstop hit: ip_hash={ip_hash[:8]}... feature={feature} total={ip_total}")
+            return {"allowed": False, "usage": {feature: ip_total}, "remaining": 0}
+
+        # 2. Check per-guest_id usage for this feature
+        guest_result = client.table("guest_usage") \
+            .select("id, use_count") \
+            .eq("guest_id", guest_id) \
+            .eq("feature", feature) \
+            .execute()
+
+        if guest_result.data and len(guest_result.data) > 0:
+            row = guest_result.data[0]
+            current_count = row.get("use_count", 0)
+
+            if current_count >= per_guest_limit:
+                return {
+                    "allowed": False,
+                    "usage": {feature: current_count},
+                    "remaining": 0,
+                }
+
+            # Increment existing row
+            new_count = current_count + 1
+            client.table("guest_usage") \
+                .update({
+                    "use_count": new_count,
+                    "last_used_at": datetime.utcnow().isoformat(),
+                }) \
+                .eq("id", row["id"]) \
+                .execute()
+
+            remaining = max(0, per_guest_limit - new_count)
+            return {
+                "allowed": True,
+                "usage": {feature: new_count},
+                "remaining": remaining,
+            }
+        else:
+            # First use: insert new row
+            record = {
+                "id": str(uuid.uuid4()),
+                "guest_id": guest_id,
+                "ip_hash": ip_hash,
+                "feature": feature,
+                "use_count": 1,
+                "first_used_at": datetime.utcnow().isoformat(),
+                "last_used_at": datetime.utcnow().isoformat(),
+            }
+            client.table("guest_usage").insert(record).execute()
+            return {
+                "allowed": True,
+                "usage": {feature: 1},
+                "remaining": per_guest_limit - 1,
+            }
+
+    except Exception as e:
+        logger.error(f"[Guest Usage Error]: {e}")
+        # Fail open: allow the request but log the error
+        return {"allowed": True, "usage": {}, "remaining": per_guest_limit}
+
+
+def cleanup_expired_guest_usage(hours: int = 48):
+    """
+    Deletes guest_usage rows older than `hours` hours.
+    Called on startup and can be called periodically.
+    """
+    client = get_supabase()
+    if not client:
+        logger.error("Cannot cleanup guest usage: no Supabase client")
+        return 0
+
+    try:
+        cutoff = (datetime.utcnow() - __import__("datetime").timedelta(hours=hours)).isoformat()
+        result = client.table("guest_usage") \
+            .delete() \
+            .lt("last_used_at", cutoff) \
+            .execute()
+        deleted = len(result.data) if result.data else 0
+        logger.info(f"Cleaned up {deleted} expired guest_usage rows (older than {hours}h)")
+        return deleted
+    except Exception as e:
+        logger.error(f"[Guest Usage Cleanup Error]: {e}")
+        return 0
+

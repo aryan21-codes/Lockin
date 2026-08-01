@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useGuestStore } from '../store/useGuestStore';
 
 const AuthContext = createContext({});
 
@@ -9,6 +10,8 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const isGuest = useGuestStore((state) => state.isGuest);
+  const clearGuestSession = useGuestStore((state) => state.clearGuestSession);
 
   useEffect(() => {
     // Check active session on mount
@@ -27,6 +30,11 @@ export const AuthProvider = ({ children }) => {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+
+        // If user logs in/signs up while in guest mode, clear guest state
+        if (session && isGuest) {
+          clearGuestSession();
+        }
       }
     );
 
@@ -41,6 +49,10 @@ export const AuthProvider = ({ children }) => {
       password,
     });
     if (error) throw error;
+    // Clear guest state on successful login
+    if (useGuestStore.getState().isGuest) {
+      clearGuestSession();
+    }
     return data;
   };
 
@@ -55,6 +67,10 @@ export const AuthProvider = ({ children }) => {
       }
     });
     if (error) throw error;
+    // Clear guest state on successful signup
+    if (useGuestStore.getState().isGuest) {
+      clearGuestSession();
+    }
     return data;
   };
 
@@ -80,7 +96,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, login, signup, logout, resetPassword, updatePassword, loading }}>
+    <AuthContext.Provider value={{ user, session, login, signup, logout, resetPassword, updatePassword, loading, isGuest }}>
       {!loading && children}
     </AuthContext.Provider>
   );

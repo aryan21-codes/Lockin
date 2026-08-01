@@ -10,13 +10,14 @@ client = AsyncOpenAI(
 
 async def _execute_completion_with_fallback(messages, model, max_tokens, temperature=0.7) -> str:
     """
-    Executes a completion request. Promotes 'openai/gpt-4o-mini' to 'google/gemma-4-31b-it:free'
-    as primary, falling back to 'google/gemma-4-26b-a4b-it:free' on rate limits or API issues.
+    Executes a completion request. Maps 'openai/gpt-4o-mini' to 'openrouter/free'
+    which dynamically routes to the best available free model on OpenRouter,
+    falling back to 'meta-llama/llama-3-8b-instruct:free' on rate limits or API issues.
     """
-    primary_model = "google/gemma-4-31b-it:free"
-    fallback_model = "google/gemma-4-26b-a4b-it:free"
+    primary_model = "openrouter/free"
+    fallback_model = "meta-llama/llama-3-8b-instruct:free"
     
-    # Intercept gpt-4o-mini and route to gemma-4-31b-it:free directly
+    # Intercept gpt-4o-mini and route to openrouter/free
     if model == "openai/gpt-4o-mini":
         model = primary_model
         
@@ -49,46 +50,58 @@ async def _execute_completion_with_fallback(messages, model, max_tokens, tempera
                 raise fallback_err
         raise e
 
+async def _generate_json_response_helper(system_prompt: str, user_prompt: str, model: str, max_tokens: int) -> dict:
+    content = await _execute_completion_with_fallback(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt + "\n\nCRITICAL: You MUST respond ONLY with valid, raw JSON. No markdown syntax, no intro, no outro."},
+            {"role": "user", "content": user_prompt}
+        ],
+        temperature=0.7,
+        max_tokens=max_tokens
+    )
+    
+    content_str = content.strip()
+    
+    # Robustly extract JSON object by finding the first '{' and last '}'
+    start_idx = content_str.find('{')
+    end_idx = content_str.rfind('}')
+    if start_idx != -1 and end_idx != -1:
+        content_str = content_str[start_idx:end_idx+1]
+        
+    try:
+        data = json.loads(content_str)
+        return data
+    except json.JSONDecodeError as jde:
+        # Attempt to clean common open-source LLM JSON quirks (e.g. trailing commas)
+        import re
+        # Remove trailing commas before closing braces/brackets
+        cleaned_str = re.sub(r',\s*([}\]])', r'\1', content_str)
+        try:
+            data = json.loads(cleaned_str)
+            return data
+        except Exception:
+            raise ValueError(f"Failed to parse model output as JSON. Output was: {content[:500]}")
+
 async def generate_json_response(system_prompt: str, user_prompt: str, model="openai/gpt-4o-mini", max_tokens=1500) -> dict:
     """
-    Core AI wrapper mapped to OpenRouter, with credit exhaustion fallback.
+    Core AI wrapper mapped to OpenRouter, with credit exhaustion fallback and JSON validation retry.
     """
+    primary_model = "openrouter/free" if model == "openai/gpt-4o-mini" else model
+    fallback_model = "google/gemma-4-26b-a4b-it:free"
+    
     try:
-        content = await _execute_completion_with_fallback(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt + "\n\nCRITICAL: You MUST respond ONLY with valid, raw JSON. No markdown syntax, no intro, no outro."},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=max_tokens
-        )
-        
-        content_str = content.strip()
-        
-        # Robustly extract JSON object by finding the first '{' and last '}'
-        start_idx = content_str.find('{')
-        end_idx = content_str.rfind('}')
-        if start_idx != -1 and end_idx != -1:
-            content_str = content_str[start_idx:end_idx+1]
-        
-        try:
-            data = json.loads(content_str)
-            return data
-        except json.JSONDecodeError as jde:
-            # Attempt to clean common open-source LLM JSON quirks (e.g. trailing commas)
-            import re
-            # Remove trailing commas before closing braces/brackets
-            cleaned_str = re.sub(r',\s*([}\]])', r'\1', content_str)
+        return await _generate_json_response_helper(system_prompt, user_prompt, primary_model, max_tokens)
+    except Exception as primary_error:
+        print(f"[JSON Generation Failed on Primary '{primary_model}']: {primary_error}")
+        if primary_model != fallback_model:
+            print(f"[JSON Generation Fallback] Retrying with model '{fallback_model}'...")
             try:
-                data = json.loads(cleaned_str)
-                return data
-            except Exception:
-                # Re-raise the original decode error if cleanup fails
-                raise jde
-    except Exception as e:
-        print(f"[OpenRouter Execution Error]: {e}")
-        raise ValueError(f"AI Generation Failed: {str(e)}")
+                return await _generate_json_response_helper(system_prompt, user_prompt, fallback_model, max_tokens)
+            except Exception as fallback_error:
+                print(f"[JSON Generation Failed on Fallback '{fallback_model}']: {fallback_error}")
+                raise fallback_error
+        raise primary_error
 
 async def generate_text_response(system_prompt: str, user_prompt: str, model="openai/gpt-4o-mini", max_tokens=2000) -> str:
     """

@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2, Mail, Lock, AlertCircle, Sparkles, ArrowRight, Zap, User, ArrowLeft, CheckCircle2, KeyRound, Clock } from 'lucide-react';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { Loader2, Mail, Lock, AlertCircle, Sparkles, ArrowRight, Zap, User, ArrowLeft, CheckCircle2, KeyRound, Clock, Eye } from 'lucide-react';
+import LogoIcon from '../components/LogoIcon';
+import { api } from '../lib/api';
+import { useGuestStore } from '../store/useGuestStore';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -19,11 +22,21 @@ const Auth = () => {
   const { login, signup, resetPassword, updatePassword, session } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const startGuestSession = useGuestStore((state) => state.startGuestSession);
+  const [guestLoading, setGuestLoading] = useState(false);
 
   // If already logged in, redirect to dashboard
   useEffect(() => {
     if (session) navigate('/');
   }, [session, navigate]);
+
+  // Show toast if guest was blocked from an auth-only route
+  useEffect(() => {
+    if (location.state?.guestBlocked) {
+      setError('Sign up to access this feature. Guest mode only includes AI demo tools.');
+    }
+  }, [location.state]);
 
   // Detect recovery callback from Supabase email link
   useEffect(() => {
@@ -186,20 +199,7 @@ const Auth = () => {
             transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.1 }}
             className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-primary via-accent to-neonPurple flex items-center justify-center shadow-[0_8px_32px_rgba(99,102,241,0.3)] mb-6 relative"
           >
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={mode}
-                initial={{ scale: 0, rotate: -90 }}
-                animate={{ scale: 1, rotate: 0 }}
-                exit={{ scale: 0, rotate: 90 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-              >
-                {mode === 'forgot' || mode === 'reset' 
-                  ? <KeyRound className="w-6 h-6 text-white" />
-                  : <Sparkles className="w-6 h-6 text-white" />
-                }
-              </motion.div>
-            </AnimatePresence>
+            <LogoIcon className="w-8 h-8 relative z-10" />
             <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary via-accent to-neonPurple animate-pulse opacity-40 blur-xl"></div>
           </motion.div>
           
@@ -401,6 +401,56 @@ const Auth = () => {
                 </>
               )}
             </motion.button>
+
+            {/* Try as Guest button — login/signup modes only */}
+            {(mode === 'login' || mode === 'signup') && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                className="mt-2"
+              >
+                <div className="relative flex items-center justify-center mb-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/[0.06]"></div>
+                  </div>
+                  <div className="relative px-4 bg-transparent text-[11px] text-gray-500 font-medium tracking-wider uppercase">
+                    or
+                  </div>
+                </div>
+                <motion.button
+                  type="button"
+                  onClick={async () => {
+                    setGuestLoading(true);
+                    setError(null);
+                    try {
+                      const resp = await api.post('/auth/guest');
+                      const { guest_token, expires_at, usage, limits } = resp.data;
+                      startGuestSession(guest_token, expires_at, usage, limits);
+                      navigate('/');
+                    } catch (err) {
+                      setError('Failed to start guest session. Please try again.');
+                    } finally {
+                      setGuestLoading(false);
+                    }
+                  }}
+                  disabled={guestLoading}
+                  whileHover={!guestLoading ? { scale: 1.02 } : undefined}
+                  whileTap={!guestLoading ? { scale: 0.98 } : undefined}
+                  className="w-full flex justify-center items-center gap-2.5 py-3 px-4 text-sm font-semibold rounded-xl border border-white/[0.08] bg-white/[0.02] text-gray-300 hover:bg-white/[0.08] hover:border-white/[0.15] hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {guestLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Eye className="w-4 h-4 text-gray-400" />
+                      Try as Guest
+                      <span className="text-[10px] text-gray-500 font-normal ml-1">— no account needed</span>
+                    </>
+                  )}
+                </motion.button>
+              </motion.div>
+            )}
           </form>
         </motion.div>
         

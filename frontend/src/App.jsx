@@ -1,11 +1,12 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Auth from './pages/Auth';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ToastProvider } from './components/ui/Toast';
+import { ToastProvider, useToast } from './components/ui/Toast';
+import { useGuestStore } from './store/useGuestStore';
 
 // ─── Lazy-loaded pages ────────────────────────────────────────
 // Only Dashboard and Auth are eagerly loaded for fastest first paint.
@@ -41,8 +42,12 @@ const PlaceholderContent = ({ title }) => (
   </div>
 );
 
+// ─── Routes guests CAN access ─────────────────────────────────
+const GUEST_ALLOWED_PATHS = ['/', '/notes', '/flashcards', '/code-explainer', '/ppt'];
+
 const ProtectedRoute = ({ children }) => {
   const { session, loading } = useAuth();
+  const isGuest = useGuestStore((state) => state.isGuest);
   
   if (loading) {
       return (
@@ -55,9 +60,32 @@ const ProtectedRoute = ({ children }) => {
       );
   }
   
-  if (!session) {
-    return <Navigate to="/auth" />;
+  // Allow authenticated users through
+  if (session) {
+    return children;
   }
+
+  // Allow guest users through
+  if (isGuest) {
+    return children;
+  }
+
+  // Not authenticated and not guest → redirect to auth
+  return <Navigate to="/auth" />;
+};
+
+/**
+ * Wraps routes that are NOT accessible to guests.
+ * Redirects guests to /auth with a contextual message.
+ */
+const AuthOnlyRoute = ({ children }) => {
+  const { session } = useAuth();
+  const isGuest = useGuestStore((state) => state.isGuest);
+
+  if (isGuest && !session) {
+    return <Navigate to="/auth" state={{ guestBlocked: true }} />;
+  }
+
   return children;
 };
 
@@ -70,17 +98,19 @@ function App() {
             <Route path="/auth" element={<Auth />} />
             <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route index element={<Dashboard />} />
+              {/* Guest-accessible AI demo routes */}
               <Route path="notes" element={<Suspense fallback={<PageSkeleton />}><NotesSummarizer /></Suspense>} />
-              <Route path="youtube" element={<Suspense fallback={<PageSkeleton />}><YouTubeSummarizer /></Suspense>} />
-              <Route path="ppt" element={<Suspense fallback={<PageSkeleton />}><PPTGenerator /></Suspense>} />
-              <Route path="todos" element={<Suspense fallback={<PageSkeleton />}><TodoList /></Suspense>} />
-              <Route path="sticky" element={<Suspense fallback={<PageSkeleton />}><StickyNotes /></Suspense>} />
               <Route path="flashcards" element={<Suspense fallback={<PageSkeleton />}><FlashcardsPage /></Suspense>} />
               <Route path="code-explainer" element={<Suspense fallback={<PageSkeleton />}><CodeExplainerPage /></Suspense>} />
-              <Route path="history" element={<Suspense fallback={<PageSkeleton />}><HistoryPage /></Suspense>} />
-              <Route path="workflow" element={<Suspense fallback={<PageSkeleton />}><AIWorkflow /></Suspense>} />
-              <Route path="exam-intelligence" element={<Suspense fallback={<PageSkeleton />}><ExamIntelligence /></Suspense>} />
-              <Route path="brain" element={<Suspense fallback={<PageSkeleton />}><SecondBrain /></Suspense>} />
+              <Route path="ppt" element={<Suspense fallback={<PageSkeleton />}><PPTGenerator /></Suspense>} />
+              {/* Auth-only routes — guests are redirected */}
+              <Route path="youtube" element={<AuthOnlyRoute><Suspense fallback={<PageSkeleton />}><YouTubeSummarizer /></Suspense></AuthOnlyRoute>} />
+              <Route path="todos" element={<AuthOnlyRoute><Suspense fallback={<PageSkeleton />}><TodoList /></Suspense></AuthOnlyRoute>} />
+              <Route path="sticky" element={<AuthOnlyRoute><Suspense fallback={<PageSkeleton />}><StickyNotes /></Suspense></AuthOnlyRoute>} />
+              <Route path="history" element={<AuthOnlyRoute><Suspense fallback={<PageSkeleton />}><HistoryPage /></Suspense></AuthOnlyRoute>} />
+              <Route path="workflow" element={<AuthOnlyRoute><Suspense fallback={<PageSkeleton />}><AIWorkflow /></Suspense></AuthOnlyRoute>} />
+              <Route path="exam-intelligence" element={<AuthOnlyRoute><Suspense fallback={<PageSkeleton />}><ExamIntelligence /></Suspense></AuthOnlyRoute>} />
+              <Route path="brain" element={<AuthOnlyRoute><Suspense fallback={<PageSkeleton />}><SecondBrain /></Suspense></AuthOnlyRoute>} />
             </Route>
           </Routes>
           <Analytics />

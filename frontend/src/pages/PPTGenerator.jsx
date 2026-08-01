@@ -38,8 +38,9 @@ const PPTGenerator = () => {
         toast.error(response.data.message || 'Generation failed');
       }
     } catch (err) {
-      setError(err.message || 'An error occurred');
-      toast.error(err.message || 'An error occurred');
+      const msg = err.response?.data?.detail?.message || err.response?.data?.message || err.message || 'An error occurred';
+      setError(msg);
+      toast.error(msg);
     } finally {
       clearInterval(stepTimer);
       setIsLoading(false);

@@ -3,21 +3,50 @@ from app.models.schemas import CodeExplainerRequest, APIResponse, CodeChatReques
 from app.services.code_explainer_service import generate_code_explanation
 from app.services.chat_service import generate_code_chat_response
 from app.utils.database import get_code_explanations
-from app.dependencies.auth import get_current_user
+from app.dependencies.auth import (
+    get_current_user, get_current_identity, require_guest_quota,
+    AuthenticatedUser, GuestUser,
+)
 
 router = APIRouter(prefix="/api/code-explainer", tags=["Code Explainer"])
 
-@router.post("/explain", response_model=APIResponse)
-async def explain_code_endpoint(request: CodeExplainerRequest, user: dict = Depends(get_current_user)):
+
+def _build_response(data, identity):
+    """Build response with guest_usage metadata if applicable."""
+    if isinstance(identity, GuestUser):
+        return APIResponse(
+            success=True,
+            data=data,
+        ).model_dump() | {
+            "guest_usage": identity.payload.get("_guest_usage", {}),
+            "guest_remaining": identity.payload.get("_guest_remaining", 0),
+        }
+    return APIResponse(success=True, data=data)
+
+
+@router.post("/explain", response_model=None)
+async def explain_code_endpoint(
+    request: CodeExplainerRequest,
+    identity=Depends(require_guest_quota("code_explainer")),
+):
     """
     Submits raw code string mappings scaling out through OpenRouter architecture.
+    Guests: quota-checked, no DB persistence.
     """
     try:
-        token = user.get("access_token")
-        explanation_data = await generate_code_explanation(request.code, request.language, user["sub"], access_token=token)
-        return APIResponse(success=True, data=explanation_data)
+        if isinstance(identity, AuthenticatedUser):
+            token = identity.access_token
+            explanation_data = await generate_code_explanation(request.code, request.language, identity.user_id, access_token=token)
+            return APIResponse(success=True, data=explanation_data)
+        else:
+            # Guest: generate explanation but don't save to DB
+            explanation_data = await generate_code_explanation(request.code, request.language, "guest", access_token=None)
+            return _build_response(explanation_data, identity)
     except Exception as e:
         return APIResponse(success=False, message=str(e))
+
+
+# ─── Authenticated-only endpoints (unchanged) ─────────────────
 
 @router.post("/chat", response_model=APIResponse)
 async def chat_code_endpoint(request: CodeChatRequest, user: dict = Depends(get_current_user)):

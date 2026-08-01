@@ -1,6 +1,7 @@
 import { useAuth } from '../context/AuthContext';
 import React, { useEffect, useState } from 'react';
 import { useDashboardData } from '../hooks/useApiQuery';
+import { useGuestStore } from '../store/useGuestStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import StatCard from '../components/StatCard';
@@ -24,6 +25,7 @@ const defaultStats = {
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { isGuest, usage, limits } = useGuestStore();
   const [showQuickActions, setShowQuickActions] = useState(false);
 
   // ─── React Query: single combined fetch, cached for 2 min ───
@@ -43,10 +45,12 @@ const Dashboard = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const firstName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Guest';
+  const firstName = isGuest ? 'Guest' : (user?.user_metadata?.name || user?.email?.split('@')[0] || 'User');
   
-  const totalGenerations = stats.notes_count + stats.videos_count + stats.ppt_count + stats.flashcards_count;
-  const mockStreak = Math.min(Math.max(Math.floor(totalGenerations / 3), 1), 14);
+  const totalGenerations = isGuest 
+    ? Object.values(usage).reduce((a, b) => a + (b || 0), 0)
+    : stats.notes_count + stats.videos_count + stats.ppt_count + stats.flashcards_count;
+  const mockStreak = isGuest ? 1 : Math.min(Math.max(Math.floor(totalGenerations / 3), 1), 14);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -75,13 +79,21 @@ const Dashboard = () => {
               </span>
             </div>
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white mb-3">
-              Welcome back, <br className="hidden md:block" /><span className="gradient-text font-black">{firstName}</span>
+              {isGuest ? (
+                <>Welcome to <br className="hidden md:block" /><span className="gradient-text font-black">Lockin AI</span></>
+              ) : (
+                <>Welcome back, <br className="hidden md:block" /><span className="gradient-text font-black">{firstName}</span></>
+              )}
             </h1>
             <p className="text-gray-500 text-[15px] flex items-center gap-2 font-medium">
               <TrendingUp className="w-4 h-4 text-emerald" />
-              <span className="text-gray-400">{mockStreak}-day streak</span>
+              {isGuest ? (
+                <span className="text-gray-400">Guest Demo Mode</span>
+              ) : (
+                <span className="text-gray-400">{mockStreak}-day streak</span>
+              )}
               <span className="text-gray-600">·</span>
-              <span>{totalGenerations} generations this week</span>
+              <span>{totalGenerations} generations so far</span>
             </p>
           </div>
           
@@ -127,7 +139,19 @@ const Dashboard = () => {
 
         {/* STATS */}
         <section>
-          {isLoading ? (
+          {isGuest ? (
+            <motion.div 
+               variants={containerVariants}
+               initial="hidden"
+               animate="show"
+               className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-4 gap-4"
+            >
+               <StatCard icon={FileText} label="Notes Summarized" value={`${usage.summarizer || 0}/${limits.summarizer || 3}`} colorClass="text-amber-400" delay={1} />
+               <StatCard icon={Presentation} label="Decks Generated" value={`${usage.ppt_generator || 0}/${limits.ppt_generator || 3}`} colorClass="text-orange-400" delay={2} />
+               <StatCard icon={Terminal} label="Code Explanations" value={`${usage.code_explainer || 0}/${limits.code_explainer || 3}`} colorClass="text-blue-400" delay={3} />
+               <StatCard icon={Layers} label="Flashcards Made" value={`${usage.flashcards || 0}/${limits.flashcards || 3}`} colorClass="text-violet-400" delay={4} />
+            </motion.div>
+          ) : isLoading ? (
              <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {[1, 2, 3, 4, 5].map((i) => <StatSkeleton key={i} />)}
              </div>
@@ -198,11 +222,31 @@ const Dashboard = () => {
           <section className="space-y-5">
             <div className="flex items-center gap-2.5">
               <Activity className="w-4 h-4 text-neonPurple" />
-              <h2 className="text-[15px] font-semibold text-gray-300 tracking-tight">Recent Activity</h2>
+              <h2 className="text-[15px] font-semibold text-gray-300 tracking-tight">{isGuest ? 'Guest Limitations' : 'Recent Activity'}</h2>
             </div>
             
             <div className="glass-panel p-4 rounded-2xl flex flex-col min-h-[360px]">
-              {isLoading ? (
+              {isGuest ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-4 relative overflow-hidden">
+                   <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(245,158,11,0.05)_0%,transparent_70%)]" />
+                   <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-amber-500/[0.12] flex items-center justify-center mb-4 relative z-10 shadow-[0_0_20px_rgba(245,158,11,0.1)]">
+                      <Sparkles className="w-6 h-6 text-amber-500" />
+                   </div>
+                   <h3 className="text-gray-200 font-semibold text-[15px] relative z-10 mb-1">You are in Guest Mode</h3>
+                   <p className="text-gray-400 text-[13px] mt-2 max-w-[240px] leading-relaxed relative z-10 mb-6">
+                     Guest mode gives you 3 free generations per AI tool. Sign up for unlimited access, history, and workspace features.
+                   </p>
+                   <motion.button
+                     onClick={() => navigate('/auth')}
+                     whileHover={{ scale: 1.05 }}
+                     whileTap={{ scale: 0.95 }}
+                     className="relative z-10 px-5 py-2.5 bg-primary text-white rounded-xl text-[13px] font-semibold shadow-[0_4px_20px_rgba(99,102,241,0.4)] flex items-center gap-2 hover:bg-primary/90 transition-colors"
+                   >
+                     Create Free Account
+                     <ArrowRight className="w-4 h-4" />
+                   </motion.button>
+                </div>
+              ) : isLoading ? (
                  <div className="flex-1 flex flex-col gap-2">
                    {[1, 2, 3, 4, 5].map((i) => <ActivitySkeleton key={i} />)}
                  </div>

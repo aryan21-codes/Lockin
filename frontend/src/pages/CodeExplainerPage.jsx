@@ -56,15 +56,16 @@ const CodeExplainerPage = () => {
       const response = await api.post('/api/code-explainer/explain', { code, language });
       if (response.data.success) {
         setResult(response.data.data.explanation);
-        fetchHistory();
+        if (user?.id) fetchHistory();
         toast.success('Code analyzed successfully!', 'AI Complete');
       } else {
         setError(response.data.message || 'Failed to analyze code');
         toast.error(response.data.message || 'Analysis failed');
       }
     } catch (err) {
-      setError(err.message || 'An error occurred');
-      toast.error(err.message || 'An error occurred');
+      const msg = err.response?.data?.detail?.message || err.response?.data?.message || err.message || 'An error occurred';
+      setError(msg);
+      toast.error(msg);
     } finally {
       clearInterval(stepTimer);
       setIsLoading(false);

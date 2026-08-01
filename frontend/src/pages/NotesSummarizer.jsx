@@ -31,8 +31,9 @@ const NotesSummarizer = () => {
         toast.error(response.data.message || 'Failed to summarize text');
       }
     } catch (err) {
-      setError(err.message || 'An error occurred');
-      toast.error(err.message || 'An error occurred');
+      const msg = err.response?.data?.detail?.message || err.response?.data?.message || err.message || 'An error occurred';
+      setError(msg);
+      toast.error(msg);
     }
   };
 
@@ -54,8 +55,9 @@ const NotesSummarizer = () => {
         toast.error(response.data.message || 'Failed to summarize');
       }
     } catch (err) {
-      setError(err.message || 'An error occurred');
-      toast.error(err.message || 'An error occurred');
+      const msg = err.response?.data?.detail?.message || err.response?.data?.message || err.message || 'An error occurred';
+      setError(msg);
+      toast.error(msg);
     }
   };
 

@@ -1,26 +1,37 @@
 import { useAuth } from '../context/AuthContext';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, Search, Sparkles, Command, LogOut, History } from 'lucide-react';
+import { Menu, Search, Sparkles, Command, LogOut, History, ArrowRight } from 'lucide-react';
 import { useStore } from '../store/useStore';
+import { useGuestStore } from '../store/useGuestStore';
 import SearchPalette from './SearchPalette';
 import { useNavigate } from 'react-router-dom';
 
 const Navbar = () => {
   const { toggleSidebar } = useStore();
   const { user, logout } = useAuth();
+  const isGuest = useGuestStore((state) => state.isGuest);
+  const clearGuestSession = useGuestStore((state) => state.clearGuestSession);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const searchInputRef = useRef(null);
   const profileRef = useRef(null);
   const navigate = useNavigate();
 
-  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'Guest';
-  const initial = user?.user_metadata?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'G';
+  const displayName = isGuest 
+    ? 'Guest' 
+    : (user?.user_metadata?.name || user?.email?.split('@')[0] || 'User');
+  const initial = isGuest 
+    ? 'G' 
+    : (user?.user_metadata?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U');
 
   const handleLogout = async () => {
     try {
-      await logout();
+      if (isGuest) {
+        clearGuestSession();
+      } else {
+        await logout();
+      }
       navigate('/auth');
     } catch (error) {
       console.error('Failed to log out', error);
@@ -103,61 +114,80 @@ const Navbar = () => {
 
           {/* Divider */}
           <div className="hidden sm:block w-px h-6 bg-white/[0.06]"></div>
-            
-          {/* Profile */}
-          <div className="flex items-center gap-2.5 pl-1 relative" ref={profileRef}>
-             <div className="flex flex-col items-end hidden sm:flex">
-                <span className="text-[13px] font-semibold text-gray-200 leading-tight">{displayName}</span>
-                <span className="text-[10px] text-gray-500 font-medium tracking-wide uppercase">Pro</span>
-             </div>
-             <motion.div 
-               onClick={() => setIsProfileOpen(!isProfileOpen)}
-               whileHover={{ scale: 1.08, boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}
-               whileTap={{ scale: 0.95 }}
-               className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-neonPurple flex items-center justify-center cursor-pointer transition-opacity shadow-[0_4px_12px_rgba(99,102,241,0.3)]"
-             >
-              <span className="text-white text-xs font-bold">{initial}</span>
-             </motion.div>
 
-             {/* Profile Dropdown */}
-             <AnimatePresence>
-               {isProfileOpen && (
-                 <motion.div
-                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                   transition={{ duration: 0.15 }}
-                   className="absolute right-0 top-[calc(100%+0.5rem)] w-48 rounded-xl bg-background border border-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden z-50 backdrop-blur-xl"
-                 >
-                   <div className="p-1">
-                     <button
-                       onClick={() => {
-                         setIsProfileOpen(false);
-                         navigate('/history');
-                       }}
-                       className="flex items-center gap-3 w-full px-3 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
-                     >
-                       <History className="w-4 h-4 text-gray-400" />
-                       <span className="text-[13px] font-medium">History</span>
-                     </button>
-                     
-                     <div className="h-px w-full bg-white/[0.04] my-1" />
-                     
-                     <button
-                       onClick={() => {
-                         setIsProfileOpen(false);
-                         handleLogout();
-                       }}
-                       className="flex items-center gap-3 w-full px-3 py-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-red-500/[0.06] transition-colors"
-                     >
-                       <LogOut className="w-4 h-4" />
-                       <span className="text-[13px] font-medium">Log out</span>
-                     </button>
-                   </div>
-                 </motion.div>
-               )}
-             </AnimatePresence>
-          </div>
+          {/* Guest: Sign Up CTA */}
+          {isGuest ? (
+            <div className="flex items-center gap-2.5 pl-1">
+              <div className="hidden sm:flex flex-col items-end">
+                <span className="text-[13px] font-semibold text-gray-200 leading-tight">Guest</span>
+                <span className="text-[10px] text-amber-400 font-medium tracking-wide uppercase">Demo</span>
+              </div>
+              <motion.button
+                onClick={() => navigate('/auth')}
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-primary text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] hover:bg-primary/90 transition-all"
+              >
+                Sign Up
+                <ArrowRight className="w-3 h-3" />
+              </motion.button>
+            </div>
+          ) : (
+            /* Authenticated: Profile dropdown */
+            <div className="flex items-center gap-2.5 pl-1 relative" ref={profileRef}>
+               <div className="hidden sm:flex flex-col items-end">
+                  <span className="text-[13px] font-semibold text-gray-200 leading-tight">{displayName}</span>
+                  <span className="text-[10px] text-gray-500 font-medium tracking-wide uppercase">Pro</span>
+               </div>
+               <motion.div 
+                 onClick={() => setIsProfileOpen(!isProfileOpen)}
+                 whileHover={{ scale: 1.08, boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}
+                 whileTap={{ scale: 0.95 }}
+                 className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-neonPurple flex items-center justify-center cursor-pointer transition-opacity shadow-[0_4px_12px_rgba(99,102,241,0.3)]"
+               >
+                <span className="text-white text-xs font-bold">{initial}</span>
+               </motion.div>
+
+               {/* Profile Dropdown */}
+               <AnimatePresence>
+                 {isProfileOpen && (
+                   <motion.div
+                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                     animate={{ opacity: 1, y: 0, scale: 1 }}
+                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                     transition={{ duration: 0.15 }}
+                     className="absolute right-0 top-[calc(100%+0.5rem)] w-48 rounded-xl bg-background border border-white/[0.08] shadow-[0_8px_30px_rgba(0,0,0,0.4)] overflow-hidden z-50 backdrop-blur-xl"
+                   >
+                     <div className="p-1">
+                       <button
+                         onClick={() => {
+                           setIsProfileOpen(false);
+                           navigate('/history');
+                         }}
+                         className="flex items-center gap-3 w-full px-3 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/[0.06] transition-colors"
+                       >
+                         <History className="w-4 h-4 text-gray-400" />
+                         <span className="text-[13px] font-medium">History</span>
+                       </button>
+                       
+                       <div className="h-px w-full bg-white/[0.04] my-1" />
+                       
+                       <button
+                         onClick={() => {
+                           setIsProfileOpen(false);
+                           handleLogout();
+                         }}
+                         className="flex items-center gap-3 w-full px-3 py-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-red-500/[0.06] transition-colors"
+                       >
+                         <LogOut className="w-4 h-4" />
+                         <span className="text-[13px] font-medium">Log out</span>
+                       </button>
+                     </div>
+                   </motion.div>
+                 )}
+               </AnimatePresence>
+            </div>
+          )}
         </div>
       </header>
 

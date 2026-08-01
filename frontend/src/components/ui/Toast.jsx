@@ -93,13 +93,7 @@ export const ToastProvider = ({ children }) => {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const toast = useCallback({
-    success: (message, title) => addToast({ type: 'success', title, message }),
-    error: (message, title) => addToast({ type: 'error', title, message }),
-    info: (message, title) => addToast({ type: 'info', title, message }),
-  }, [addToast]);
-
-  // Fix: useCallback doesn't work directly with object - use useMemo pattern
+  // useMemo (not useCallback) for object of methods
   const toastMethods = React.useMemo(() => ({
     success: (message, title) => addToast({ type: 'success', title, message }),
     error: (message, title) => addToast({ type: 'error', title, message }),

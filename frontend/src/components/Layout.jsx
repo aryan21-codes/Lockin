@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import GuestBanner from './GuestBanner';
 import PageTransition from './ui/PageTransition';
 import { useStore } from '../store/useStore';
 
@@ -14,7 +15,7 @@ const Layout = () => {
     if (window.innerWidth < 768) {
       setSidebarOpen(false);
     }
-  }, [location.pathname]);
+  }, [location.pathname, setSidebarOpen]);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background noise-bg">
@@ -34,6 +35,7 @@ const Layout = () => {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-[1]">
         <Navbar />
         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 relative h-full w-full">
+          <GuestBanner />
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
               <Outlet />

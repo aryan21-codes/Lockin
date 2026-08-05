@@ -372,11 +372,14 @@ Respond ONLY with a JSON object in this extremely strict schema:
     _build_closing_slide(prs, pres_title)
 
     # ── Save ──
-    os.makedirs("output", exist_ok=True)
+    # Absolute path to output directory in backend folder
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
     # Sanitize filename
     safe_name = re.sub(r'[^a-zA-Z0-9_\- ]', '', pres_title)[:40].strip().replace(' ', '_')
     filename = f"presentation_{safe_name}.pptx"
-    filepath = os.path.join("output", filename)
+    filepath = os.path.join(OUTPUT_DIR, filename)
     prs.save(filepath)
 
     # Supabase Tracking (skip for guest/anonymous users)

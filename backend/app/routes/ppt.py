@@ -40,9 +40,12 @@ async def generate_ppt(
     except Exception as e:
         return APIResponse(success=False, message=str(e))
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+
 @router.get("/download/{filename}")
 async def download_ppt(filename: str):
-    filepath = os.path.join("output", filename)
+    filepath = os.path.join(OUTPUT_DIR, filename)
     if os.path.exists(filepath):
         return FileResponse(filepath, filename=filename, media_type='application/vnd.openxmlformats-officedocument.presentationml.presentation')
     return APIResponse(success=False, message="File not found")

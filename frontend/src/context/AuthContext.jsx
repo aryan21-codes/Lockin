@@ -79,6 +79,21 @@ export const AuthProvider = ({ children }) => {
     if (error) throw error;
   };
 
+  const signInWithGoogle = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+      },
+    });
+    if (error) throw error;
+    return data;
+  };
+
   const resetPassword = async (email) => {
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth?type=recovery`,
@@ -96,7 +111,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, login, signup, logout, resetPassword, updatePassword, loading, isGuest }}>
+    <AuthContext.Provider value={{ user, session, login, signup, logout, signInWithGoogle, resetPassword, updatePassword, loading, isGuest }}>
       {!loading && children}
     </AuthContext.Provider>
   );

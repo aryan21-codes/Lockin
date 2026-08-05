@@ -3,6 +3,8 @@ import re
 import urllib.request
 import urllib.parse
 import tempfile
+import asyncio
+import httpx
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
@@ -163,31 +165,32 @@ def _build_content_slide(prs, slide_data, slide_num, total_slides):
     )
 
 
-def _fetch_image_for_slide(image_prompt):
-    """Fetch an image from pollinations.ai based on a prompt and return the temp file path."""
+async def _fetch_image_for_slide_async(client: httpx.AsyncClient, image_prompt: str) -> str:
+    """Fetch an image from pollinations.ai asynchronously and return the temp file path."""
     encoded_prompt = urllib.parse.quote(image_prompt)
     url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=800&height=800&nologo=true"
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
-            data = response.read()
+        response = await client.get(url, timeout=15.0, follow_redirects=True)
+        if response.status_code == 200:
             fd, path = tempfile.mkstemp(suffix=".jpg")
             with os.fdopen(fd, 'wb') as f:
-                f.write(data)
+                f.write(response.content)
             return path
+        else:
+            print(f"Failed to fetch image: Status code {response.status_code}")
+            return None
     except Exception as e:
         print(f"Failed to fetch image: {e}")
         return None
 
 
-def _build_visual_slide(prs, slide_data, slide_num, total_slides):
+def _build_visual_slide(prs, slide_data, slide_num, total_slides, image_path=None):
     """Slide with content on the left and a generated image on the right."""
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _set_slide_bg(slide, BG_DARK)
 
     title = slide_data.get("title", "Untitled")
     points = slide_data.get("points", [])
-    image_prompt = slide_data.get("image_prompt", "")
 
     # Top accent bar & Slide number
     _add_shape_rect(slide, Inches(0), Inches(0), SLIDE_WIDTH, Inches(0.06), ACCENT)
@@ -202,17 +205,15 @@ def _build_visual_slide(prs, slide_data, slide_num, total_slides):
         _add_bullet_list(slide, Inches(0.8), Inches(2.8), Inches(5.5), Inches(4), points, font_size=15, color=TEXT_GRAY)
 
     # Image
-    if image_prompt:
-        img_path = _fetch_image_for_slide(image_prompt)
-        if img_path:
-            try:
-                # Add image to right side
-                slide.shapes.add_picture(img_path, Inches(6.8), Inches(1.0), height=Inches(5.5))
-            except Exception as e:
-                print(f"Error adding picture to slide: {e}")
-            finally:
-                if os.path.exists(img_path):
-                    os.remove(img_path)
+    if image_path:
+        try:
+            # Add image to right side
+            slide.shapes.add_picture(image_path, Inches(6.8), Inches(1.0), height=Inches(5.5))
+        except Exception as e:
+            print(f"Error adding picture to slide: {e}")
+        finally:
+            if os.path.exists(image_path):
+                os.remove(image_path)
 
     # Bottom branding
     _add_shape_rect(slide, Inches(0), Inches(7.15), SLIDE_WIDTH, Inches(0.35), BG_CARD)
@@ -347,29 +348,56 @@ Respond ONLY with a JSON object in this extremely strict schema:
     if not slides_data:
         raise ValueError("AI failed to generate structural slide data.")
 
-    # ── Build the presentation ──
-    prs = Presentation()
-    prs.slide_width = SLIDE_WIDTH
-    prs.slide_height = SLIDE_HEIGHT
+    # ── Fetch visual slide images in parallel ──
+    img_paths = {}
+    visual_slides = [s for s in slides_data if s.get("type") == "visual" and s.get("image_prompt")]
+    if visual_slides:
+        async with httpx.AsyncClient(verify=False) as client:
+            tasks = []
+            for idx, slide in enumerate(slides_data):
+                if slide.get("type") == "visual" and slide.get("image_prompt"):
+                    tasks.append((idx, _fetch_image_for_slide_async(client, slide.get("image_prompt"))))
+            
+            if tasks:
+                indices, fetch_coros = zip(*tasks)
+                results = await asyncio.gather(*fetch_coros)
+                for i, path in zip(indices, results):
+                    if path:
+                        img_paths[i] = path
 
-    # 1. Title slide
-    subtitle = f"{len(slides_data)} slides  •  AI-generated study material"
-    _build_title_slide(prs, pres_title, subtitle)
+    try:
+        # ── Build the presentation ──
+        prs = Presentation()
+        prs.slide_width = SLIDE_WIDTH
+        prs.slide_height = SLIDE_HEIGHT
 
-    # 2. Content slides
-    for idx, slide_data in enumerate(slides_data, start=1):
-        slide_type = slide_data.get("type", "content")
-        if slide_type == "visual":
-            _build_visual_slide(prs, slide_data, idx, len(slides_data))
-        elif slide_type == "comparison":
-            _build_comparison_slide(prs, slide_data, idx, len(slides_data))
-        elif slide_type == "quote":
-            _build_quote_slide(prs, slide_data, idx, len(slides_data))
-        else:
-            _build_content_slide(prs, slide_data, idx, len(slides_data))
+        # 1. Title slide
+        subtitle = f"{len(slides_data)} slides  •  AI-generated study material"
+        _build_title_slide(prs, pres_title, subtitle)
 
-    # 3. Closing slide
-    _build_closing_slide(prs, pres_title)
+        # 2. Content slides
+        for idx, slide_data in enumerate(slides_data, start=1):
+            slide_type = slide_data.get("type", "content")
+            if slide_type == "visual":
+                pre_fetched_img = img_paths.get(idx - 1)
+                _build_visual_slide(prs, slide_data, idx, len(slides_data), image_path=pre_fetched_img)
+            elif slide_type == "comparison":
+                _build_comparison_slide(prs, slide_data, idx, len(slides_data))
+            elif slide_type == "quote":
+                _build_quote_slide(prs, slide_data, idx, len(slides_data))
+            else:
+                _build_content_slide(prs, slide_data, idx, len(slides_data))
+
+        # 3. Closing slide
+        _build_closing_slide(prs, pres_title)
+    finally:
+        # Clean up any image files that were downloaded but not removed
+        for path in img_paths.values():
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
 
     # ── Save ──
     # Absolute path to output directory in backend folder

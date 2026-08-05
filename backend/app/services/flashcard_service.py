@@ -38,9 +38,10 @@ Aim to generate between 5 and 15 highly effective flashcards based on the materi
     flashcards_list = response.get("flashcards", [])
     
     if flashcards_list:
-        # Commit directly to Postgres via wrapper
-        saved_records = save_flashcards(user_id, flashcards_list, access_token=access_token)
-        # Fallback to returning raw array if Supabase table isn't created yet gracefully
-        return saved_records if saved_records else flashcards_list
+        # Skip Supabase persistence for guest/anonymous users
+        if user_id not in ("guest", "anonymous"):
+            saved_records = save_flashcards(user_id, flashcards_list, access_token=access_token)
+            return saved_records if saved_records else flashcards_list
+        return flashcards_list
         
     return []

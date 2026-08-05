@@ -35,20 +35,21 @@ Ensure every major structural piece of logic in the code is isolated and explain
         max_tokens=3000
     )
     
-    # Attempt to commit directly to Supabase via wrapper
-    saved_record = save_code_explanation(user_id, code, response, access_token=access_token)
-    
-    # Return augmented object holding the Supabase DB identity gracefully tracking telemetry
-    if saved_record:
-        return {
-            "id": saved_record.get("id"),
-            "user_id": saved_record.get("user_id"),
-            "code": saved_record.get("code"),
-            "explanation": saved_record.get("explanation", response),
-            "created_at": saved_record.get("created_at")
-        }
+    # Skip Supabase persistence for guest/anonymous users
+    if user_id not in ("guest", "anonymous"):
+        saved_record = save_code_explanation(user_id, code, response, access_token=access_token)
         
-    # Fallback to local runtime object if Supabase table is missing
+        # Return augmented object holding the Supabase DB identity gracefully tracking telemetry
+        if saved_record:
+            return {
+                "id": saved_record.get("id"),
+                "user_id": saved_record.get("user_id"),
+                "code": saved_record.get("code"),
+                "explanation": saved_record.get("explanation", response),
+                "created_at": saved_record.get("created_at")
+            }
+        
+    # Fallback to local runtime object for guests or if Supabase table is missing
     from datetime import datetime
     import uuid
     return {

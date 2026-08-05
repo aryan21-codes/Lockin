@@ -447,8 +447,9 @@ async def generate_smart_notes(
         "model": model,
     }
 
-    # --- Log to Supabase ---
-    log_generation(user_id=user_id, content_type="smart_notes", content_data=final)
+    # --- Log to Supabase (skip for guest/anonymous users) ---
+    if user_id not in ("guest", "anonymous"):
+        log_generation(user_id=user_id, content_type="smart_notes", content_data=final)
 
     return final
 

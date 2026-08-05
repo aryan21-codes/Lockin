@@ -379,11 +379,12 @@ Respond ONLY with a JSON object in this extremely strict schema:
     filepath = os.path.join("output", filename)
     prs.save(filepath)
 
-    # Supabase Tracking
-    log_generation(
-        user_id=user_id, 
-        content_type="ppt_presentation", 
-        content_data={"prompt": prompt_text, "num_slides": len(slides_data), "filename": filename}
-    )
+    # Supabase Tracking (skip for guest/anonymous users)
+    if user_id not in ("guest", "anonymous"):
+        log_generation(
+            user_id=user_id, 
+            content_type="ppt_presentation", 
+            content_data={"prompt": prompt_text, "num_slides": len(slides_data), "filename": filename}
+        )
     
     return filepath

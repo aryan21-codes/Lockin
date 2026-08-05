@@ -71,10 +71,10 @@ const NotesSummarizer = () => {
     setError('');
     setResult(null);
     
-    // Simulate step progression
+    // Simulate step progression matching the 7-step backend pipeline
     const stepTimer = setInterval(() => {
-      setLoadingStep(prev => Math.min(prev + 1, 2));
-    }, 2000);
+      setLoadingStep(prev => Math.min(prev + 1, 6));
+    }, 25000);
     
     if (activeTab === 'text') {
       await handleSummarizeText();
@@ -220,7 +220,15 @@ const NotesSummarizer = () => {
           
           {isLoading ? (
             <AILoadingSteps 
-              steps={['Analyzing content…', 'Extracting key points…', 'Generating summary…']} 
+              steps={[
+                'Generating model answer…',
+                'Structuring answer…',
+                'Expanding into smart notes…',
+                'Enriching with examples…',
+                'Adding exam elements…',
+                'Generating revision block…',
+                'Quality review & finalizing…'
+              ]} 
               currentStep={loadingStep} 
             />
           ) : (

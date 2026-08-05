@@ -8,7 +8,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000, // 30s timeout for production
+  timeout: 300000, // 5 min — AI pipelines (Smart Notes, PPT) can take 2-4 min
 });
 
 // ─── Token Cache ───────────────────────────────────────────────

@@ -63,19 +63,27 @@ def _set_text(text_frame, text, font_size, color, bold=False, font_name=FONT_BOD
 
 def _add_text_box(slide, left, top, width, height, text, font_size, color,
                   bold=False, font_name=FONT_BODY, align=PP_ALIGN.LEFT):
-    """Add a text box with styled text."""
+    """Add a text box with styled text and zero margins."""
     txBox = slide.shapes.add_textbox(left, top, width, height)
     tf = txBox.text_frame
     tf.word_wrap = True
+    tf.margin_left = Inches(0)
+    tf.margin_right = Inches(0)
+    tf.margin_top = Inches(0)
+    tf.margin_bottom = Inches(0)
     _set_text(tf, text, font_size, color, bold, font_name, align)
     return txBox
 
 
 def _add_bullet_list(slide, left, top, width, height, items, font_size=16, color=TEXT_GRAY):
-    """Add a text box containing multiple bullet points."""
+    """Add a text box containing multiple bullet points with proper hanging indents."""
     txBox = slide.shapes.add_textbox(left, top, width, height)
     tf = txBox.text_frame
     tf.word_wrap = True
+    tf.margin_left = Inches(0)
+    tf.margin_right = Inches(0)
+    tf.margin_top = Inches(0)
+    tf.margin_bottom = Inches(0)
 
     for i, item in enumerate(items):
         if i == 0:
@@ -83,12 +91,16 @@ def _add_bullet_list(slide, left, top, width, height, items, font_size=16, color
         else:
             p = tf.add_paragraph()
 
-        p.text = f"▸  {item}"
+        p.text = f"▸\t{item}"
         p.font.size = Pt(font_size)
         p.font.color.rgb = color
         p.font.name = FONT_BODY
-        p.space_after = Pt(10)
+        p.space_after = Pt(12)  # breathing room between points
         p.alignment = PP_ALIGN.LEFT
+        
+        # Proper hanging indent:
+        p.left_indent = Inches(0.35)
+        p.first_line_indent = Inches(-0.25)
 
     return txBox
 
@@ -103,15 +115,15 @@ def _build_title_slide(prs, title_text, subtitle_text=""):
 
     # Title
     _add_text_box(
-        slide, Inches(1.2), Inches(2.2), Inches(9), Inches(1.5),
-        title_text, font_size=40, color=TEXT_WHITE, bold=True, font_name=FONT_HEADING
+        slide, Inches(1.2), Inches(2.0), Inches(10.5), Inches(1.8),
+        title_text, font_size=38, color=TEXT_WHITE, bold=True, font_name=FONT_HEADING
     )
 
     # Subtitle
     if subtitle_text:
         _add_text_box(
-            slide, Inches(1.2), Inches(3.8), Inches(8), Inches(0.8),
-            subtitle_text, font_size=18, color=TEXT_MUTED
+            slide, Inches(1.2), Inches(4.2), Inches(10.5), Inches(0.8),
+            subtitle_text, font_size=16, color=TEXT_MUTED
         )
 
     # Bottom accent line
@@ -143,17 +155,17 @@ def _build_content_slide(prs, slide_data, slide_num, total_slides):
 
     # Title
     _add_text_box(
-        slide, Inches(0.8), Inches(0.9), Inches(10), Inches(1),
-        title, font_size=30, color=TEXT_WHITE, bold=True, font_name=FONT_HEADING
+        slide, Inches(0.8), Inches(0.8), Inches(11.7), Inches(0.8),
+        title, font_size=26, color=TEXT_WHITE, bold=True, font_name=FONT_HEADING
     )
 
     # Divider line under title
-    _add_shape_rect(slide, Inches(0.8), Inches(1.85), Inches(1.8), Inches(0.03), ACCENT_LIGHT)
+    _add_shape_rect(slide, Inches(0.8), Inches(1.75), Inches(1.8), Inches(0.03), ACCENT_LIGHT)
 
     # Bullet points
     if points:
         _add_bullet_list(
-            slide, Inches(0.8), Inches(2.3), Inches(10.5), Inches(4.5),
+            slide, Inches(0.8), Inches(2.1), Inches(11.7), Inches(4.5),
             points, font_size=15, color=TEXT_GRAY
         )
 
@@ -165,26 +177,26 @@ def _build_content_slide(prs, slide_data, slide_num, total_slides):
     )
 
 
-async def _fetch_image_for_slide_async(client: httpx.AsyncClient, image_prompt: str, max_retries: int = 3) -> str:
+async def _fetch_image_for_slide_async(client: httpx.AsyncClient, image_prompt: str, max_retries: int = 2) -> str:
     """Fetch an image from pollinations.ai with retry logic for rate limits."""
     encoded_prompt = urllib.parse.quote(image_prompt)
     url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=800&height=800&nologo=true"
     
     for attempt in range(max_retries):
         try:
-            response = await client.get(url, timeout=45.0, follow_redirects=True)
+            response = await client.get(url, timeout=12.0, follow_redirects=True)
             if response.status_code == 200 and len(response.content) > 1000:
                 fd, path = tempfile.mkstemp(suffix=".jpg")
                 with os.fdopen(fd, 'wb') as f:
                     f.write(response.content)
                 return path
             elif response.status_code == 429:
-                wait = 5 * (attempt + 1)
+                wait = 2 * (attempt + 1)
                 print(f"[PPT Image] Rate limited (429), waiting {wait}s before retry {attempt+1}/{max_retries}")
                 await asyncio.sleep(wait)
                 continue
             elif response.status_code >= 500:
-                wait = 3 * (attempt + 1)
+                wait = 2 * (attempt + 1)
                 print(f"[PPT Image] Server error ({response.status_code}), waiting {wait}s before retry {attempt+1}/{max_retries}")
                 await asyncio.sleep(wait)
                 continue
@@ -194,7 +206,7 @@ async def _fetch_image_for_slide_async(client: httpx.AsyncClient, image_prompt: 
         except Exception as e:
             print(f"[PPT Image] Attempt {attempt+1} failed: {e}")
             if attempt < max_retries - 1:
-                await asyncio.sleep(3 * (attempt + 1))
+                await asyncio.sleep(2 * (attempt + 1))
             continue
     
     print(f"[PPT Image] All {max_retries} attempts exhausted for prompt: {image_prompt[:60]}...")
@@ -214,18 +226,20 @@ def _build_visual_slide(prs, slide_data, slide_num, total_slides, image_path=Non
     _add_text_box(slide, Inches(0.8), Inches(0.45), Inches(1.2), Inches(0.4), f"{slide_num:02d} / {total_slides:02d}", font_size=10, color=TEXT_MUTED)
 
     # Title
-    _add_text_box(slide, Inches(0.8), Inches(0.9), Inches(5.5), Inches(1.5), title, font_size=30, color=TEXT_WHITE, bold=True, font_name=FONT_HEADING)
-    _add_shape_rect(slide, Inches(0.8), Inches(2.35), Inches(1.8), Inches(0.03), ACCENT_LIGHT)
+    _add_text_box(slide, Inches(0.8), Inches(0.8), Inches(5.5), Inches(0.8), title, font_size=26, color=TEXT_WHITE, bold=True, font_name=FONT_HEADING)
+    _add_shape_rect(slide, Inches(0.8), Inches(1.75), Inches(1.8), Inches(0.03), ACCENT_LIGHT)
 
     # Bullet points
     if points:
-        _add_bullet_list(slide, Inches(0.8), Inches(2.8), Inches(5.5), Inches(4), points, font_size=15, color=TEXT_GRAY)
+        _add_bullet_list(slide, Inches(0.8), Inches(2.1), Inches(5.5), Inches(4.5), points, font_size=14, color=TEXT_GRAY)
 
     # Image
     if image_path:
         try:
+            # Framing box behind the image
+            _add_shape_rect(slide, Inches(6.7), Inches(0.7), Inches(5.9), Inches(5.9), BG_CARD)
             # Add image to right side
-            slide.shapes.add_picture(image_path, Inches(6.8), Inches(1.0), height=Inches(5.5))
+            slide.shapes.add_picture(image_path, Inches(6.8), Inches(0.8), width=Inches(5.7), height=Inches(5.7))
         except Exception as e:
             print(f"Error adding picture to slide: {e}")
         finally:
@@ -250,18 +264,18 @@ def _build_comparison_slide(prs, slide_data, slide_num, total_slides):
     _add_text_box(slide, Inches(0.8), Inches(0.45), Inches(1.2), Inches(0.4), f"{slide_num:02d} / {total_slides:02d}", font_size=10, color=TEXT_MUTED)
 
     # Centered Title
-    _add_text_box(slide, Inches(0), Inches(0.9), SLIDE_WIDTH, Inches(1), title, font_size=30, color=TEXT_WHITE, bold=True, font_name=FONT_HEADING, align=PP_ALIGN.CENTER)
-    _add_shape_rect(slide, Inches(5.76), Inches(1.85), Inches(1.8), Inches(0.03), ACCENT_LIGHT)
+    _add_text_box(slide, Inches(0.8), Inches(0.8), Inches(11.7), Inches(0.8), title, font_size=26, color=TEXT_WHITE, bold=True, font_name=FONT_HEADING, align=PP_ALIGN.CENTER)
+    _add_shape_rect(slide, Inches(5.76), Inches(1.75), Inches(1.8), Inches(0.03), ACCENT_LIGHT)
 
     # Left Column
-    _add_shape_rect(slide, Inches(0.8), Inches(2.3), Inches(5.5), Inches(4.5), BG_CARD)
+    _add_shape_rect(slide, Inches(0.8), Inches(2.1), Inches(5.6), Inches(4.5), BG_CARD)
     if left_points:
-        _add_bullet_list(slide, Inches(1.2), Inches(2.6), Inches(4.7), Inches(4), left_points, font_size=14, color=TEXT_GRAY)
+        _add_bullet_list(slide, Inches(1.1), Inches(2.4), Inches(5.0), Inches(3.9), left_points, font_size=14, color=TEXT_GRAY)
 
     # Right Column
-    _add_shape_rect(slide, Inches(7.0), Inches(2.3), Inches(5.5), Inches(4.5), BG_CARD)
+    _add_shape_rect(slide, Inches(6.9), Inches(2.1), Inches(5.6), Inches(4.5), BG_CARD)
     if right_points:
-        _add_bullet_list(slide, Inches(7.4), Inches(2.6), Inches(4.7), Inches(4), right_points, font_size=14, color=TEXT_GRAY)
+        _add_bullet_list(slide, Inches(7.2), Inches(2.4), Inches(5.0), Inches(3.9), right_points, font_size=14, color=TEXT_GRAY)
 
     # Bottom branding
     _add_shape_rect(slide, Inches(0), Inches(7.15), SLIDE_WIDTH, Inches(0.35), BG_DARK)
@@ -281,13 +295,13 @@ def _build_quote_slide(prs, slide_data, slide_num, total_slides):
     _add_text_box(slide, Inches(0.8), Inches(0.45), Inches(1.2), Inches(0.4), f"{slide_num:02d} / {total_slides:02d}", font_size=10, color=TEXT_MUTED)
 
     # Big Quote marks
-    _add_text_box(slide, Inches(1.0), Inches(1.5), Inches(2), Inches(2), "“", font_size=120, color=PURPLE, bold=True, font_name="Georgia")
+    _add_text_box(slide, Inches(1.2), Inches(1.2), Inches(2), Inches(1.5), "“", font_size=110, color=PURPLE, bold=True, font_name="Georgia")
 
     # The quote
-    _add_text_box(slide, Inches(1.8), Inches(2.5), Inches(9.7), Inches(2.5), f"{quote}", font_size=36, color=TEXT_WHITE, bold=False, font_name=FONT_HEADING, align=PP_ALIGN.LEFT)
+    _add_text_box(slide, Inches(1.8), Inches(2.2), Inches(9.7), Inches(3.0), f"{quote}", font_size=32, color=TEXT_WHITE, bold=False, font_name=FONT_HEADING, align=PP_ALIGN.LEFT)
 
     # Author
-    _add_text_box(slide, Inches(1.8), Inches(5.5), Inches(9.7), Inches(1), f"— {author}", font_size=20, color=ACCENT_LIGHT, bold=True, font_name=FONT_BODY, align=PP_ALIGN.LEFT)
+    _add_text_box(slide, Inches(1.8), Inches(5.3), Inches(9.7), Inches(1), f"— {author}", font_size=18, color=ACCENT_LIGHT, bold=True, font_name=FONT_BODY, align=PP_ALIGN.LEFT)
 
     # Bottom branding
     _add_shape_rect(slide, Inches(0), Inches(7.15), SLIDE_WIDTH, Inches(0.35), BG_DARK)
@@ -332,12 +346,13 @@ Total slides: EXACTLY {num_slides}
 RULES:
 1. Use a MIX of these slide types (at least 2 different types):
    - "content": Title + 4-6 bullet points. Each bullet is 1-2 clear sentences with real substance.
-   - "visual": Title + 3-4 bullet points + an "image_prompt". The image_prompt must be a SHORT, simple description (under 15 words, e.g. "modern office workspace with dual monitors and coffee").
+   - "visual": Title + 3-4 bullet points + an "image_prompt". Use visual slides sparingly (MAXIMUM 2 visual slides per presentation). The image_prompt must be a SHORT, simple description (under 15 words, e.g. "modern office workspace with dual monitors and coffee").
    - "comparison": Title + "left_points" + "right_points" (3-4 items each). Good for pros/cons, before/after, or two approaches.
    - "quote": A memorable "quote" + "author". Use sparingly (max 1).
 2. Bullet points must be substantive explanations, not vague phrases.
 3. Titles must be concise (3-7 words).
 4. image_prompt must be SHORT and concrete — no flowery language. Example: "student studying with laptop in library" NOT "A cinematic, breathtakingly detailed ultra-wide photograph of..."
+5. IMPORTANT: Generates at most 2 "visual" slides to maintain a fast and high-quality generation.
 
 Respond ONLY with this JSON:
 {{

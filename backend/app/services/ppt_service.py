@@ -114,11 +114,11 @@ def _add_rounded_card(slide, left, top, width, height, fill_color, corner_radius
 
 def _set_shape_transparency(shape, alpha_val):
     """Set transparency on a shape. alpha_val: 0=opaque, 100000=fully transparent."""
-    solid_fill = shape.fill._fill
-    srgb = solid_fill.find(qn('a:solidFill'))
-    if srgb is None:
+    spPr = shape.fill._xPr
+    solid_fill = spPr.find(qn('a:solidFill'))
+    if solid_fill is None:
         return
-    clr = srgb.find(qn('a:srgbClr'))
+    clr = solid_fill.find(qn('a:srgbClr'))
     if clr is None:
         return
     alpha_elem = parse_xml(f'<a:alpha {nsdecls("a")} val="{alpha_val}"/>')

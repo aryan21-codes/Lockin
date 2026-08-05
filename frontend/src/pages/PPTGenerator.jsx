@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../lib/api';
-import { Presentation, Loader2, Download, CheckCircle2 } from 'lucide-react';
+import { Presentation, Loader2, Download, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import AnimatedButton from '../components/ui/AnimatedButton';
 import { AILoadingSteps } from '../components/ui/TypewriterText';
 import { useToast } from '../components/ui/Toast';
@@ -13,6 +13,7 @@ const PPTGenerator = () => {
   const [loadingStep, setLoadingStep] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
   const toast = useToast();
 
   const handleGenerate = async (e) => {
@@ -23,6 +24,7 @@ const PPTGenerator = () => {
     setLoadingStep(0);
     setError('');
     setResult(null);
+    setShowPreview(false);
     
     const stepTimer = setInterval(() => {
       setLoadingStep(prev => Math.min(prev + 1, 3));
@@ -45,6 +47,12 @@ const PPTGenerator = () => {
       clearInterval(stepTimer);
       setIsLoading(false);
     }
+  };
+
+  const getFullUrl = () => {
+    if (!result) return '';
+    const baseUrl = api.defaults.baseURL || 'http://localhost:8000';
+    return `${baseUrl}${result.url}`;
   };
 
   return (
@@ -134,7 +142,7 @@ const PPTGenerator = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="glass-card p-8 rounded-2xl flex flex-col items-center justify-center gap-6 text-center border-orange-500/30 shadow-[0_0_30px_rgba(249,115,22,0.1)]"
+            className="glass-card p-8 rounded-2xl flex flex-col items-center justify-center gap-6 text-center border-orange-500/30 shadow-[0_0_30px_rgba(249,115,22,0.1)] overflow-hidden"
           >
             <motion.div 
               initial={{ scale: 0 }}
@@ -155,28 +163,61 @@ const PPTGenerator = () => {
               <p className="text-gray-400 max-w-md mx-auto">Your presentation has been successfully generated and is ready for download.</p>
             </div>
             
-            <AnimatedButton
-              onClick={() => {
-                try {
-                  const baseUrl = api.defaults.baseURL || 'http://localhost:8000';
-                  const fullUrl = `${baseUrl}${result.url}`;
-                  
-                  // Use window.open to bypass cross-origin programmatic click restrictions in Edge/Chrome
-                  // that strip the Content-Disposition filename and replace it with a UUID.
-                  window.open(fullUrl, '_blank');
-                  
-                  toast.success('Download started!');
-                } catch (err) {
-                  console.error('Download failed:', err);
-                  toast.error('Download failed');
-                }
-              }}
-              variant="secondary"
-              className="mt-2 px-8 py-3 rounded-xl"
-            >
-              <Download className="w-5 h-5" />
-              Download .pptx
-            </AnimatedButton>
+            <div className="flex flex-wrap justify-center gap-4 mt-2 w-full">
+              <AnimatedButton
+                onClick={() => setShowPreview(!showPreview)}
+                variant="secondary"
+                className="px-6 py-3 rounded-xl min-w-[160px]"
+              >
+                {showPreview ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                {showPreview ? 'Hide Preview' : 'Preview Slides'}
+              </AnimatedButton>
+              
+              <AnimatedButton
+                onClick={() => {
+                  try {
+                    window.open(getFullUrl(), '_blank');
+                    toast.success('Download started!');
+                  } catch (err) {
+                    console.error('Download failed:', err);
+                    toast.error('Download failed');
+                  }
+                }}
+                variant="primary"
+                className="bg-orange-500 hover:bg-orange-600 px-6 py-3 rounded-xl min-w-[160px]"
+              >
+                <Download className="w-5 h-5" />
+                Download .pptx
+              </AnimatedButton>
+            </div>
+
+            <AnimatePresence>
+              {showPreview && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                  animate={{ opacity: 1, height: '600px', marginTop: 24 }}
+                  exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="w-full rounded-xl overflow-hidden border border-white/10 bg-black/50 relative"
+                >
+                  {getFullUrl().includes('localhost') || getFullUrl().includes('127.0.0.1') ? (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 p-6 absolute inset-0">
+                      <EyeOff className="w-12 h-12 mb-4 text-gray-500 opacity-50" />
+                      <p className="text-lg font-medium text-white/80">Live preview unavailable</p>
+                      <p className="text-sm mt-2 text-center max-w-sm">
+                        The Office Viewer requires a publicly accessible URL. Please test this feature on the production deployment.
+                      </p>
+                    </div>
+                  ) : (
+                    <iframe
+                      src={`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(getFullUrl())}`}
+                      className="w-full h-full absolute inset-0 border-none bg-white"
+                      title="PPT Preview"
+                    />
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>

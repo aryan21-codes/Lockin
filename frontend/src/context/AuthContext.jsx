@@ -79,6 +79,19 @@ export const AuthProvider = ({ children }) => {
     if (error) throw error;
   };
 
+  const signInWithGoogleIdToken = async (token) => {
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: token,
+    });
+    if (error) throw error;
+    // Clear guest state on successful login
+    if (useGuestStore.getState().isGuest) {
+      clearGuestSession();
+    }
+    return data;
+  };
+
   const signInWithGoogle = async () => {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -111,7 +124,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, login, signup, logout, signInWithGoogle, resetPassword, updatePassword, loading, isGuest }}>
+    <AuthContext.Provider value={{ user, session, login, signup, logout, signInWithGoogle, signInWithGoogleIdToken, resetPassword, updatePassword, loading, isGuest }}>
       {!loading && children}
     </AuthContext.Provider>
   );

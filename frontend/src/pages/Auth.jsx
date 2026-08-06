@@ -55,9 +55,10 @@ const Auth = () => {
         const googleBtnContainer = document.getElementById('google-signin-button');
         if (googleBtnContainer) {
           window.google.accounts.id.renderButton(googleBtnContainer, {
-            theme: 'outline',
+            theme: 'filled_black',
             size: 'large',
             width: googleBtnContainer.offsetWidth || 350,
+            shape: 'rectangular',
             text: mode === 'signup' ? 'signup_with' : 'signin_with',
           });
         }
@@ -251,10 +252,10 @@ const Auth = () => {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-            className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary via-accent to-neonPurple flex items-center justify-center shadow-[0_8px_32px_rgba(99,102,241,0.3)] relative"
+            className="relative flex items-center justify-center mb-2"
           >
-            <LogoIcon className="w-8 h-8 relative z-10" />
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary via-accent to-neonPurple animate-pulse opacity-40 blur-xl"></div>
+            <LogoIcon className="w-16 h-16 relative z-10 drop-shadow-2xl" />
+            <div className="absolute inset-0 rounded-full bg-primary animate-pulse opacity-20 blur-2xl scale-150"></div>
           </motion.div>
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -304,10 +305,10 @@ const Auth = () => {
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.1 }}
-            className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-primary via-accent to-neonPurple flex items-center justify-center shadow-[0_8px_32px_rgba(99,102,241,0.3)] mb-6 relative"
+            className="relative flex items-center justify-center mb-8"
           >
-            <LogoIcon className="w-8 h-8 relative z-10" />
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary via-accent to-neonPurple animate-pulse opacity-40 blur-xl"></div>
+            <LogoIcon className="w-16 h-16 relative z-10 drop-shadow-2xl" />
+            <div className="absolute inset-0 rounded-full bg-primary animate-pulse opacity-20 blur-2xl scale-150"></div>
           </motion.div>
           
           <AnimatePresence mode="wait">
@@ -525,7 +526,7 @@ const Auth = () => {
                     or continue with
                   </div>
                 </div>
-                <div id="google-signin-button" className="w-full flex justify-center overflow-hidden rounded-xl"></div>
+                <div id="google-signin-button" className="w-full flex justify-center"></div>
               </motion.div>
             )}
 

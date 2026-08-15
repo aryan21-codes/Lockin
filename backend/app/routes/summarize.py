@@ -36,7 +36,7 @@ async def summarize_text(
             user_id = identity.user_id
             token = identity.access_token
             ai_data = await generate_smart_notes(request.text, user_id=user_id)
-            log_generation(user_id, "smart_notes", {"type": "text"}, title="Smart Notes Generated", prompt=request.text[:200], access_token=token)
+            log_generation(user_id, "smart_notes", {**ai_data, "type": "text"}, title="Smart Notes Generated", prompt=request.text[:200], access_token=token)
             return APIResponse(success=True, data=ai_data)
         else:
             # Guest: generate but skip persistence
@@ -55,13 +55,16 @@ async def summarize_pdf(
         return APIResponse(success=False, message="Please upload a valid PDF file.")
     try:
         content = await file.read()
+        max_size = 10 * 1024 * 1024  # 10MB
+        if len(content) > max_size:
+            return APIResponse(success=False, message="File size exceeds 10MB limit. Please upload a smaller PDF.")
         extracted_text = extract_text_from_pdf(content)
 
         if isinstance(identity, AuthenticatedUser):
             user_id = identity.user_id
             token = identity.access_token
             ai_data = await generate_smart_notes(extracted_text, user_id=user_id)
-            log_generation(user_id, "smart_notes", {"type": "pdf", "filename": file.filename}, title=f"Smart Notes: {file.filename}", prompt=extracted_text[:200], access_token=token)
+            log_generation(user_id, "smart_notes", {**ai_data, "type": "pdf", "filename": file.filename}, title=f"Smart Notes: {file.filename}", prompt=extracted_text[:200], access_token=token)
             return APIResponse(success=True, data=ai_data)
         else:
             # Guest: generate but skip persistence

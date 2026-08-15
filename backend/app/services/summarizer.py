@@ -18,7 +18,6 @@ import json
 import asyncio
 from app.services.openai_service import generate_json_response
 from app.utils.chunking import chunk_text
-from app.utils.database import log_generation
 
 # ---------------------------------------------------------------------------
 # Default model — routed through OpenRouter
@@ -446,10 +445,6 @@ async def generate_smart_notes(
         "steps_completed": 7,
         "model": model,
     }
-
-    # --- Log to Supabase (skip for guest/anonymous users) ---
-    if user_id not in ("guest", "anonymous"):
-        log_generation(user_id=user_id, content_type="smart_notes", content_data=final)
 
     return final
 

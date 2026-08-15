@@ -20,6 +20,9 @@ const NotesSummarizer = () => {
   const fileInputRef = useRef(null);
   const toast = useToast();
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  const MIN_TEXT_LENGTH = 20;
+
   const handleSummarizeText = async () => {
     try {
       const response = await api.post('/api/summarize/', { text });
@@ -61,9 +64,8 @@ const NotesSummarizer = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (activeTab === 'text' && !text.trim()) return;
+  const handleSubmit = async () => {
+    if (activeTab === 'text' && text.trim().length < MIN_TEXT_LENGTH) return;
     if (activeTab === 'pdf' && !file) return;
     
     setIsLoading(true);
@@ -74,7 +76,7 @@ const NotesSummarizer = () => {
     // Simulate step progression matching the 7-step backend pipeline
     const stepTimer = setInterval(() => {
       setLoadingStep(prev => Math.min(prev + 1, 6));
-    }, 25000);
+    }, 10000);
     
     if (activeTab === 'text') {
       await handleSummarizeText();
@@ -116,7 +118,7 @@ const NotesSummarizer = () => {
         ].map(tab => (
           <motion.button 
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => { setActiveTab(tab.key); setError(''); setResult(null); }}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             className={`px-6 py-2.5 rounded-lg flex items-center gap-2 text-sm font-medium transition-all relative ${activeTab === tab.key ? 'text-amber-400 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'text-gray-400 hover:text-white'}`}
@@ -154,6 +156,9 @@ const NotesSummarizer = () => {
                 onChange={(e) => setText(e.target.value)}
                 className="w-full h-64 bg-surfaceHover border border-white/10 rounded-xl py-4 px-4 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/50 input-glow transition-all custom-scrollbar resize-none"
               />
+              {text.length > 0 && text.trim().length < MIN_TEXT_LENGTH && (
+                <p className="text-xs text-amber-400 mt-1">Please enter at least {MIN_TEXT_LENGTH} characters for meaningful results.</p>
+              )}
             </motion.div>
           ) : (
             <motion.div key="pdf" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}>
@@ -205,11 +210,19 @@ const NotesSummarizer = () => {
                  accept="application/pdf" 
                  ref={fileInputRef}
                  className="hidden"
-                 onChange={(e) => {
-                   if (e.target.files && e.target.files[0]) {
-                     setFile(e.target.files[0]);
-                   }
-                 }}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      const selectedFile = e.target.files[0];
+                      if (selectedFile.size > MAX_FILE_SIZE) {
+                        setError('File size exceeds 10MB limit. Please upload a smaller PDF.');
+                        toast.error('File size exceeds 10MB limit.');
+                        e.target.value = '';
+                        return;
+                      }
+                      setError('');
+                      setFile(selectedFile);
+                    }
+                  }}
                />
             </motion.div>
           )}
@@ -235,7 +248,7 @@ const NotesSummarizer = () => {
             <AnimatedButton
               variant="primary"
               onClick={handleSubmit}
-              disabled={isLoading || (activeTab === 'text' && !text.trim()) || (activeTab === 'pdf' && !file)}
+              disabled={isLoading || (activeTab === 'text' && text.trim().length < MIN_TEXT_LENGTH) || (activeTab === 'pdf' && !file)}
               className="ml-auto bg-amber-500 hover:bg-amber-600 text-white px-8 py-3 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.3)]"
             >
               <Play className="w-4 h-4" /> Summarize {activeTab === 'pdf' ? 'PDF' : 'Text'}

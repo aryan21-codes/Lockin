@@ -88,7 +88,7 @@ async def generate_json_response(system_prompt: str, user_prompt: str, model="op
     Core AI wrapper mapped to OpenRouter, with credit exhaustion fallback and JSON validation retry.
     """
     primary_model = "openrouter/free" if model == "openai/gpt-4o-mini" else model
-    fallback_model = "google/gemma-4-26b-a4b-it:free"
+    fallback_model = "google/gemma-2-9b-it:free"
     
     try:
         return await _generate_json_response_helper(system_prompt, user_prompt, primary_model, max_tokens)

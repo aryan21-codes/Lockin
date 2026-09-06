@@ -377,7 +377,8 @@ const AIWorkflow = () => {
     } catch (err) {
       clearInterval(stepTimer);
       setStatus('error');
-      setError(err.response?.data?.message || err.message || 'Pipeline failed. Please try again.');
+      const msg = err.displayMessage || err.response?.data?.message || err.message || 'Pipeline failed. Please try again.';
+      setError(msg);
     }
   };
 

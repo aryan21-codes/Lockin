@@ -5,7 +5,7 @@ import asyncio
 from dotenv import load_dotenv
 
 # Add backend directory to path
-backend_dir = r'c:\Users\ultra\Downloads\SIGMA WEB DEV\Lockin\backend'
+backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, backend_dir)
 load_dotenv(os.path.join(backend_dir, '.env'))
 
@@ -40,9 +40,12 @@ async def test_model(model_name: str):
 
 async def main():
     models = [
-        "meta-llama/llama-3.3-70b-instruct:free",
-        "meta-llama/llama-3.2-3b-instruct:free",
-        "qwen/qwen3-coder:free"
+        "openrouter/free",
+        "google/gemma-4-31b-it:free",
+        "google/gemma-4-26b-a4b-it:free",
+        "nvidia/nemotron-3.5-lightning:free",
+        "minimax/minimax-m2.7:free",
+        "minimax/minimax-m3:free",
     ]
     for model in models:
         await test_model(model)

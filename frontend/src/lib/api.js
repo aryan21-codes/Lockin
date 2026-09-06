@@ -51,6 +51,8 @@ api.interceptors.request.use(
 
 // ─── Response Interceptor ─────────────────────────────────────
 // Handles guest usage metadata sync and expired guest tokens
+// PLUS: Normalizes error messages so every error has a human-readable
+//        `displayMessage` property (handles both string and object detail).
 api.interceptors.response.use(
   (response) => {
     if (response.config?.metadata?.startTime) {
@@ -77,14 +79,32 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // ─── Global Server-Error Normalization ─────────────────────
+    // Handles three response shapes:
+    //   1. HTTPException with string detail → {"detail": "Session expired"}
+    //   2. HTTPException with object detail → {"detail": {"error": x, "message": y}}
+    //   3. App-level APIResponse error      → {"success": false, "message": "..."}
+    const detail = error.response?.data?.detail;
+    let displayMessage;
+    if (typeof detail === 'string' && detail.length > 0) {
+      displayMessage = detail;
+    } else if (detail && typeof detail === 'object' && typeof detail.message === 'string') {
+      displayMessage = detail.message;
+    } else if (typeof error.response?.data?.message === 'string') {
+      displayMessage = error.response.data.message;
+    } else {
+      displayMessage = error.message || 'An unexpected error occurred';
+    }
+    error.displayMessage = displayMessage;
+
     // Handle guest-specific errors
     const store = useGuestStore.getState();
     if (store.isGuest && error.response) {
       const status = error.response.status;
-      const detail = error.response.data?.detail;
+      const detailData = error.response.data?.detail;
 
       // Guest token expired → silently re-issue
-      if (status === 401 && detail === 'Guest session expired') {
+      if (status === 401 && displayMessage === 'Guest session expired') {
         try {
           const reissueResp = await axios.post(
             `${api.defaults.baseURL}/api/auth/guest`,
@@ -105,9 +125,9 @@ api.interceptors.response.use(
       }
 
       // Guest quota exceeded → sync usage from error detail
-      if (status === 429 && detail?.error === 'guest_limit_reached') {
-        if (detail.usage) {
-          store.updateUsageFromResponse(detail.usage);
+      if (status === 429 && detailData?.error === 'guest_limit_reached') {
+        if (detailData.usage) {
+          store.updateUsageFromResponse(detailData.usage);
         }
       }
     }

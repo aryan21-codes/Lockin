@@ -4,7 +4,7 @@ import { useHistoryData } from '../hooks/useApiQuery';
 import { useNavigate } from 'react-router-dom';
 import { 
   History as HistoryIcon, FileText, MonitorPlay, Presentation, Layers, Terminal, 
-  Loader2, Zap, ChevronDown, ChevronUp, BookOpen, HelpCircle, Play
+  Loader2, Zap, ChevronDown, ChevronUp, BookOpen, HelpCircle, Play, Target
 } from 'lucide-react';
 import SkeletonLoader from '../components/ui/SkeletonLoader';
 
@@ -20,7 +20,8 @@ const HistoryPage = () => {
     { id: 'youtube', label: 'YT Summaries', icon: MonitorPlay, color: 'text-red-500' },
     { id: 'ppt', label: 'Presentations', icon: Presentation, color: 'text-orange-500' },
     { id: 'flashcards', label: 'Flashcards', icon: Layers, color: 'text-purple-400' },
-    { id: 'code_explainer', label: 'Code Explanations', icon: Terminal, color: 'text-neonBlue' }
+    { id: 'code_explainer', label: 'Code Explanations', icon: Terminal, color: 'text-neonBlue' },
+    { id: 'exam_intelligence', label: 'Exam Intelligence', icon: Target, color: 'text-rose-400' }
   ];
 
   // ─── React Query infinite scroll ──────────────────────────────
@@ -234,14 +235,20 @@ const HistoryPage = () => {
             ? (log.question || 'Flashcard') 
             : activeTab === 'code_explainer' 
               ? 'Code Explanation' 
-              : (log.content?.title || log.title || 'Untitled Generation')}
+              : activeTab === 'exam_intelligence'
+                ? (log.content?.title || 'Exam Intelligence Report')
+                : (log.content?.title || log.title || 'Untitled Generation')}
         </h3>
         <p className="text-gray-500 mt-1 text-[13px] line-clamp-2">
           {activeTab === 'flashcards' 
             ? (log.answer || `Generated Flashcard`) 
             : activeTab === 'code_explainer' 
               ? (log.code?.substring(0, 120) + '...' || 'Analyzed code') 
-              : (log.content?.youtube_url || log.content?.prompt?.substring(0, 120) || log.content?.filename || 'Analyzed Material...')}
+              : activeTab === 'exam_intelligence'
+                ? (log.content?.time_available
+                    ? `Study window: ${log.content.time_available} · Priority topics: ${log.content?.priority_topics?.length || 0}`
+                    : (log.content?.summary?.substring(0, 120) || 'Exam preparation insights'))
+                : (log.content?.youtube_url || log.content?.prompt?.substring(0, 120) || log.content?.filename || 'Analyzed Material...')}
         </p>
       </div>
       <div className="text-[12px] font-mono text-gray-600 shrink-0 md:text-right pt-1">
@@ -366,7 +373,7 @@ const HistoryPage = () => {
               <div className="text-center">
                 <h3 className="text-gray-400 font-medium text-[14px]">No history yet</h3>
                 <p className="text-gray-600 text-[12px] mt-1 max-w-[220px]">
-                  Your {activeTab === 'workflow' ? 'AI workflow' : activeTab} generations will appear here.
+                  Your {activeTab === 'workflow' ? 'AI workflow' : activeTab === 'exam_intelligence' ? 'exam intelligence' : activeTab} generations will appear here.
                 </p>
               </div>
             </motion.div>

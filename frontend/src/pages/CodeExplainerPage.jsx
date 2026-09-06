@@ -63,7 +63,7 @@ const CodeExplainerPage = () => {
         toast.error(response.data.message || 'Analysis failed');
       }
     } catch (err) {
-      const msg = err.response?.data?.detail?.message || err.response?.data?.message || err.message || 'An error occurred';
+      const msg = err.displayMessage || err.message || 'An error occurred';
       setError(msg);
       toast.error(msg);
     } finally {

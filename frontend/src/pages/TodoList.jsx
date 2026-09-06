@@ -52,7 +52,7 @@ const TodoList = () => {
       }
     } catch (err) {
       console.error(err);
-      toast.error('Failed to add task');
+      toast.error(err.displayMessage || err.message || 'Failed to add task');
     }
   };
 
@@ -74,7 +74,7 @@ const TodoList = () => {
       }
     } catch (err) {
       console.error(err);
-      toast.error('Failed to update task');
+      toast.error(err.displayMessage || err.message || 'Failed to update task');
       setTodos(todos.map(t => t.id === id ? { ...t, completed: !newCompleted } : t));
     }
   };
@@ -92,7 +92,7 @@ const TodoList = () => {
       }
     } catch (err) {
       console.error(err);
-      toast.error('Failed to delete task');
+      toast.error(err.displayMessage || err.message || 'Failed to delete task');
       setTodos(prevTodos);
     }
   };

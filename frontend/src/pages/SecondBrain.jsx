@@ -193,7 +193,8 @@ const AskAIPanel = () => {
         setMessages(prev => [...prev, { role: 'ai', content: resp.data.message || 'Failed to get answer.' }]);
       }
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'ai', content: 'Connection error. Please try again.' }]);
+      const msg = err.displayMessage || 'Connection error. Please try again.';
+      setMessages(prev => [...prev, { role: 'ai', content: msg }]);
     } finally {
       setIsAsking(false);
     }

@@ -199,7 +199,8 @@ const ExamIntelligence = () => {
     } catch (err) {
       clearInterval(stepTimer);
       setStatus('error');
-      setError(err.response?.data?.message || err.message || 'Pipeline process error.');
+      const msg = err.displayMessage || err.response?.data?.message || err.message || 'Pipeline process error.';
+      setError(msg);
     }
   };
 

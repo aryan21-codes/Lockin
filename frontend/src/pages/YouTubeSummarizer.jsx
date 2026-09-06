@@ -50,7 +50,7 @@ const YouTubeSummarizer = () => {
         }
       }
     } catch (err) {
-      const errorMsg = err.message || 'An error occurred';
+      const errorMsg = err.displayMessage || err.message || 'An error occurred';
       setError(errorMsg);
       toast.error(errorMsg);
       if (
@@ -95,8 +95,9 @@ const YouTubeSummarizer = () => {
         toast.error(response.data.message || 'Failed to summarize transcript');
       }
     } catch (err) {
-      setError(err.message || 'An error occurred');
-      toast.error(err.message || 'An error occurred');
+      const msg = err.displayMessage || err.message || 'An error occurred';
+      setError(msg);
+      toast.error(msg);
     } finally {
       clearInterval(stepTimer);
       setIsLoading(false);

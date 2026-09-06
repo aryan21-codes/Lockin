@@ -73,6 +73,16 @@ async def get_feature_history(
                              .execute()
             return APIResponse(success=True, data=response.data)
         
+        elif feature == "exam_intelligence":
+            response = client.table("content_generations") \
+                             .select("id, content_type, content, created_at") \
+                             .eq("user_id", user_id) \
+                             .eq("content_type", "exam_intelligence") \
+                             .order("created_at", desc=True) \
+                             .range(offset, offset + limit - 1) \
+                             .execute()
+            return APIResponse(success=True, data=response.data)
+        
         else:
             return APIResponse(success=False, message="Invalid feature specified")
             
